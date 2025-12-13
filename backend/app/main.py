@@ -17,6 +17,7 @@ from .ingestion.chunker import estimate_tokens
 from .ingestion.file_parser import FileParser
 from .openrouter_client import OpenRouterClient, OpenRouterError
 from .openrouter_client import ChatMessage
+from .retrieval.fusion import dedupe_keep_order, rrf_fuse
 from .retrieval.hybrid_retriever import HybridRetriever
 from .session_store import ChatTurn, cleanup_expired_sessions, get_or_create_session, get_session
 
@@ -398,32 +399,214 @@ async def chat(
     except OpenRouterError as e:
         raise HTTPException(status_code=502, detail=f"OpenRouter translate error: {e}") from e
 
-    await session.log("[LOG] Chat: embedding query (instruction-aware)...")
+    base_query = (expanded_query or "").strip() or user_query
+
+    query_texts: list[str] = [base_query]
+    hyde_text: str = ""
+    if settings.query_fusion_enabled:
+        await session.log("[LOG] Chat: generating query variants (multi-query)...")
+        try:
+            variants = await openrouter.generate_query_variants(
+                query=base_query,
+                doc_language=str(doc_language),
+                n=settings.query_variants_count,
+            )
+        except OpenRouterError as e:
+            await session.log(f"[LOG] WARNING: query variants failed: {e}")
+            variants = []
+
+        # Keep the raw query too (useful for cross-lingual names / phrasing).
+        query_texts = dedupe_keep_order([base_query, user_query] + variants)
+
+        if settings.hyde_enabled:
+            await session.log("[LOG] Chat: generating HyDE passage (retrieval-only)...")
+            try:
+                hyde_text = await openrouter.generate_hyde_passage(
+                    query=base_query,
+                    doc_language=str(doc_language),
+                    max_words=settings.hyde_max_words,
+                )
+            except OpenRouterError as e:
+                await session.log(f"[LOG] WARNING: HyDE generation failed: {e}")
+                hyde_text = ""
+    else:
+        query_texts = dedupe_keep_order([base_query, user_query])
+
+    # Embed all query texts (and optional HyDE) in one call.
+    await session.log("[LOG] Chat: embedding query variants (instruction-aware)...")
+    embed_inputs: list[str] = []
+    slices: dict[str, slice] = {}
+    for q in query_texts:
+        inputs_for_q = _build_embedding_query_inputs(settings=settings, queries=[q])
+        if not inputs_for_q:
+            continue
+        start = len(embed_inputs)
+        embed_inputs.extend(inputs_for_q)
+        end = len(embed_inputs)
+        slices[q] = slice(start, end)
+
+    if hyde_text.strip():
+        start = len(embed_inputs)
+        embed_inputs.append(hyde_text.strip())
+        end = len(embed_inputs)
+        slices["__hyde__"] = slice(start, end)
+
+    if not embed_inputs:
+        raise HTTPException(status_code=400, detail="Empty message")
+
     try:
-        query_variants = _unique_nonempty([user_query, expanded_query])
-        embed_inputs = _build_embedding_query_inputs(settings=settings, queries=query_variants)
-        if not embed_inputs:
-            raise HTTPException(status_code=400, detail="Empty message")
         q_embs = await openrouter.embeddings(model=settings.embedding_model, inputs=embed_inputs)
     except OpenRouterError as e:
         raise HTTPException(status_code=502, detail=f"OpenRouter embedding error: {e}") from e
 
-    if q_embs.ndim != 2 or q_embs.shape[0] < 1:
+    if q_embs.ndim != 2 or q_embs.shape[0] != len(embed_inputs):
         raise HTTPException(status_code=500, detail="Unexpected embedding response shape")
 
     import numpy as np
 
-    query_embedding = np.mean(q_embs, axis=0, dtype=np.float32)
+    def cosine(a: np.ndarray, b: np.ndarray) -> float:
+        aa = np.asarray(a, dtype=np.float32).reshape(-1)
+        bb = np.asarray(b, dtype=np.float32).reshape(-1)
+        denom = float(np.linalg.norm(aa) * np.linalg.norm(bb))
+        if denom < 1e-12:
+            return 0.0
+        return float(np.dot(aa, bb) / denom)
 
-    await session.log("[LOG] Chat: hybrid retrieval (FAISS + BM25)...")
-    scored = retriever.search(
-        query=user_query,
-        query_embedding=query_embedding,
-        expanded_query=expanded_query,
-        top_k=req.top_k,
+    query_vecs: dict[str, np.ndarray] = {}
+    for q, sl in slices.items():
+        if q == "__hyde__":
+            continue
+        vec = np.mean(q_embs[sl], axis=0, dtype=np.float32)
+        query_vecs[q] = vec
+
+    base_vec = query_vecs.get(base_query)
+    if base_vec is None and query_vecs:
+        base_vec = next(iter(query_vecs.values()))
+
+    # Drift filter (recall-oriented): only drop clearly off-topic variants.
+    if base_vec is not None:
+        scored_variants: list[tuple[float, str]] = []
+        for q in query_texts:
+            if q == base_query:
+                continue
+            v = query_vecs.get(q)
+            if v is None:
+                continue
+            scored_variants.append((cosine(base_vec, v), q))
+
+        scored_variants.sort(key=lambda x: x[0], reverse=True)
+        kept: list[str] = [base_query]
+        for sim, q in scored_variants:
+            if settings.drift_filter_enabled and sim < settings.drift_sim_threshold:
+                continue
+            if len(kept) >= max(1, settings.query_variants_max):
+                break
+            kept.append(q)
+        query_texts = kept
+
+    # Optional HyDE drift filter.
+    use_hyde = False
+    hyde_vec: np.ndarray | None = None
+    hyde_slice = slices.get("__hyde__")
+    if hyde_slice is not None:
+        hyde_vec = np.mean(q_embs[hyde_slice], axis=0, dtype=np.float32)
+        if base_vec is None:
+            use_hyde = True
+        else:
+            sim_hyde = cosine(base_vec, hyde_vec)
+            use_hyde = (not settings.drift_filter_enabled) or (
+                sim_hyde >= settings.hyde_drift_sim_threshold
+            )
+
+    await session.log(
+        f"[LOG] Chat: fusion queries={len(query_texts)} hyde={'on' if use_hyde else 'off'}"
     )
 
-    retrieved_chunks = [s.chunk for s in scored]
+    # Retrieve per query, then fuse with RRF (robust to score calibration).
+    await session.log("[LOG] Chat: retrieval (multi-query + RRF fusion)...")
+    rankings: list[list[str]] = []
+    id_to_chunk: dict[str, object] = {}
+
+    for q in query_texts:
+        v = query_vecs.get(q)
+        if v is None:
+            continue
+        scored = retriever.search(
+            query=q,
+            query_embedding=v,
+            expanded_query=q,
+            top_k=settings.fusion_per_query_top_k,
+        )
+        ranking_ids: list[str] = []
+        for s in scored:
+            cid = s.chunk.id
+            ranking_ids.append(cid)
+            id_to_chunk[cid] = s.chunk
+        if ranking_ids:
+            rankings.append(ranking_ids)
+
+    if use_hyde and hyde_vec is not None:
+        scored = retriever.search(
+            query=base_query,
+            query_embedding=hyde_vec,
+            expanded_query=base_query,
+            top_k=settings.fusion_per_query_top_k,
+        )
+        ranking_ids = []
+        for s in scored:
+            cid = s.chunk.id
+            ranking_ids.append(cid)
+            id_to_chunk[cid] = s.chunk
+        if ranking_ids:
+            rankings.append(ranking_ids)
+
+    fused_ids = rrf_fuse(rankings, k=settings.rrf_k, max_results=settings.fusion_max_candidates)
+    candidate_chunks = [id_to_chunk[cid] for cid in fused_ids if cid in id_to_chunk]
+
+    # Fall back to a single retrieval if fusion failed unexpectedly.
+    if not candidate_chunks:
+        scored = retriever.search(
+            query=base_query,
+            query_embedding=base_vec if base_vec is not None else q_embs[0],
+            expanded_query=base_query,
+            top_k=max(req.top_k, 1),
+        )
+        candidate_chunks = [s.chunk for s in scored]
+
+    if settings.llm_rerank_enabled and candidate_chunks:
+        pool_n = max(1, min(settings.llm_rerank_candidate_pool, len(candidate_chunks)))
+        pool = candidate_chunks[:pool_n]
+        passages = [(c.id, c.content) for c in pool]
+
+        await session.log(f"[LOG] Chat: LLM rerank pool={pool_n}...")
+        try:
+            ranked_ids = await openrouter.rerank_passages_yesno(
+                query=base_query,
+                passages=passages,
+                doc_language=str(doc_language),
+                model=settings.llm_rerank_model or None,
+                max_chars=settings.llm_rerank_max_chars,
+            )
+        except OpenRouterError as e:
+            await session.log(f"[LOG] WARNING: rerank failed: {e}")
+        else:
+            id_to_chunk_all = {c.id: c for c in candidate_chunks}
+            ordered: list = []
+            seen: set[str] = set()
+            for cid in ranked_ids:
+                ch = id_to_chunk_all.get(cid)
+                if ch is None or cid in seen:
+                    continue
+                seen.add(cid)
+                ordered.append(ch)
+            for ch in candidate_chunks:
+                if ch.id in seen:
+                    continue
+                ordered.append(ch)
+            candidate_chunks = ordered
+
+    # Final selection for answer context.
+    retrieved_chunks = candidate_chunks[: req.top_k]
     context_blocks = _build_context_blocks(chunks=retrieved_chunks, include_neighbors=True)
     context_text = "\n\n".join(context_blocks)
 
