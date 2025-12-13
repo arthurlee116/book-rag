@@ -113,11 +113,18 @@ async def _ingest_file(
     chunker = Chunker(target_tokens=500)
     chunks = chunker.chunk(blocks=blocks)
     await session.log(f"[LOG] Created {len(chunks)} chunks")
+    if not chunks:
+        async with session.lock:
+            session.ingest_status = "error"
+            session.ingest_error = "No chunks created from document"
+        await session.log("[LOG] ERROR: No chunks created from document")
+        return
 
     # Embed chunks in batches.
     await session.log("[LOG] Building vector embeddings (batched)...")
     batch_size = 32
     embeddings_list: list[list[float]] = []
+    detected_embedding_dim: int | None = None
     total_batches = (len(chunks) + batch_size - 1) // batch_size
 
     for b in range(total_batches):
@@ -133,16 +140,54 @@ async def _ingest_file(
                 session.ingest_error = str(e)
             await session.log(f"[LOG] ERROR embedding: {e}")
             return
+
+        if embs.ndim != 2 or embs.shape[0] != len(texts):
+            async with session.lock:
+                session.ingest_status = "error"
+                session.ingest_error = f"Unexpected embeddings shape: {tuple(embs.shape)}"
+            await session.log(f"[LOG] ERROR embedding: Unexpected embeddings shape {tuple(embs.shape)}")
+            return
+
+        batch_dim = int(embs.shape[1])
+        if detected_embedding_dim is None:
+            detected_embedding_dim = batch_dim
+            await session.log(f"[LOG] Detected embedding dim: {detected_embedding_dim}")
+        elif batch_dim != detected_embedding_dim:
+            async with session.lock:
+                session.ingest_status = "error"
+                session.ingest_error = (
+                    f"Inconsistent embedding dim across batches: "
+                    f"expected {detected_embedding_dim}, got {batch_dim}"
+                )
+            await session.log(
+                "[LOG] ERROR embedding: Inconsistent embedding dim across batches "
+                f"(expected {detected_embedding_dim}, got {batch_dim})"
+            )
+            return
         embeddings_list.extend(embs.tolist())
 
     embeddings = embeddings_list
     await session.log("[LOG] Building FAISS + BM25 indexes in memory...")
 
+    if detected_embedding_dim is None:
+        async with session.lock:
+            session.ingest_status = "error"
+            session.ingest_error = "Could not determine embedding dimension"
+        await session.log("[LOG] ERROR: Could not determine embedding dimension")
+        return
+
+    if settings.embedding_dim and settings.embedding_dim != detected_embedding_dim:
+        await session.log(
+            "[LOG] WARNING: OPENROUTER_EMBEDDING_DIM="
+            f"{settings.embedding_dim} but model returned {detected_embedding_dim}; "
+            f"using {detected_embedding_dim}"
+        )
+
     retriever = HybridRetriever(
-        embedding_dim=settings.embedding_dim,
+        embedding_dim=detected_embedding_dim,
         vector_weight=0.8,
         bm25_weight=0.2,
-        candidate_k=50,
+        candidate_k=100,
     )
     try:
         import numpy as np
@@ -248,6 +293,74 @@ def _estimate_prompt_tokens(*, text_parts: list[str]) -> int:
     return sum(estimate_tokens(t) for t in text_parts if t)
 
 
+def _unique_nonempty(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in items:
+        s = (raw or "").strip()
+        if not s or s in seen:
+            continue
+        seen.add(s)
+        out.append(s)
+    return out
+
+
+def _build_embedding_query_inputs(*, settings: Settings, queries: list[str]) -> list[str]:
+    """
+    Build embedding inputs for user queries, optionally using instruction-aware format.
+    """
+    queries = _unique_nonempty(queries)
+    if not queries:
+        return []
+
+    inputs: list[str] = []
+    if settings.embedding_query_use_instruction:
+        template = settings.embedding_query_instruction_template
+        task = settings.embedding_query_task
+        for q in queries:
+            try:
+                inputs.append(template.format(task=task, query=q))
+            except Exception:
+                # Fallback: if template is invalid, still provide something reasonable.
+                inputs.append(f"Instruct: {task}\nQuery:{q}")
+
+    if settings.embedding_query_include_raw or not inputs:
+        inputs.extend(queries)
+
+    return _unique_nonempty(inputs)
+
+
+def _trim_text(text: str, *, max_chars: int) -> str:
+    t = (text or "").strip()
+    if len(t) <= max_chars:
+        return t
+    return t[: max_chars - 1].rstrip() + "…"
+
+
+def _build_context_blocks(*, chunks: list, include_neighbors: bool = True) -> list[str]:
+    """
+    Render numbered context blocks like:
+      [1] PREV: ...
+          CHUNK: ...
+          NEXT: ...
+    The numbering must align with the citations list returned to the frontend.
+    """
+    blocks: list[str] = []
+    for i, ch in enumerate(chunks, start=1):
+        parts: list[str] = []
+        if include_neighbors and getattr(ch, "prev_content", None):
+            prev = _trim_text(ch.prev_content or "", max_chars=600)
+            if prev:
+                parts.append(f"PREV:\n{prev}")
+        parts.append(f"CHUNK:\n{(ch.content or '').strip()}")
+        if include_neighbors and getattr(ch, "next_content", None):
+            nxt = _trim_text(ch.next_content or "", max_chars=600)
+            if nxt:
+                parts.append(f"NEXT:\n{nxt}")
+        blocks.append(f"[{i}] " + "\n\n".join(parts))
+    return blocks
+
+
 def _extract_citation_numbers(answer: str) -> list[int]:
     # Back-compat wrapper used by export rewriting.
     from .guardrails import extract_citation_numbers
@@ -285,32 +398,40 @@ async def chat(
     except OpenRouterError as e:
         raise HTTPException(status_code=502, detail=f"OpenRouter translate error: {e}") from e
 
-    await session.log("[LOG] Chat: embedding query...")
+    await session.log("[LOG] Chat: embedding query (instruction-aware)...")
     try:
-        q_embs = await openrouter.embeddings(model=settings.embedding_model, inputs=[user_query])
+        query_variants = _unique_nonempty([user_query, expanded_query])
+        embed_inputs = _build_embedding_query_inputs(settings=settings, queries=query_variants)
+        if not embed_inputs:
+            raise HTTPException(status_code=400, detail="Empty message")
+        q_embs = await openrouter.embeddings(model=settings.embedding_model, inputs=embed_inputs)
     except OpenRouterError as e:
         raise HTTPException(status_code=502, detail=f"OpenRouter embedding error: {e}") from e
 
-    if q_embs.shape[0] != 1:
+    if q_embs.ndim != 2 or q_embs.shape[0] < 1:
         raise HTTPException(status_code=500, detail="Unexpected embedding response shape")
+
+    import numpy as np
+
+    query_embedding = np.mean(q_embs, axis=0, dtype=np.float32)
 
     await session.log("[LOG] Chat: hybrid retrieval (FAISS + BM25)...")
     scored = retriever.search(
         query=user_query,
-        query_embedding=q_embs[0],
+        query_embedding=query_embedding,
         expanded_query=expanded_query,
         top_k=req.top_k,
     )
 
     retrieved_chunks = [s.chunk for s in scored]
-    context_blocks = [f"[{i}] {ch.content}" for i, ch in enumerate(retrieved_chunks, start=1)]
+    context_blocks = _build_context_blocks(chunks=retrieved_chunks, include_neighbors=True)
     context_text = "\n\n".join(context_blocks)
 
     system_prompt = (
         "You are a strict RAG QA engine.\n"
         "Rules:\n"
         "1) You MUST answer using ONLY the provided document excerpts in CONTEXT.\n"
-        '2) If the answer is not explicitly stated in CONTEXT, reply exactly: "The document does not mention this."\n'
+        '2) If the answer cannot be found in CONTEXT, reply exactly: "The document does not mention this."\n'
         "3) When you use information from an excerpt, cite it with stacked citations like [1][2].\n"
         "4) Do not use any outside knowledge. Do not guess.\n"
     )
@@ -346,15 +467,52 @@ async def chat(
 
     # Guardrails beyond prompting:
     # - require citations for any non-fallback answer
-    # - if citations are invalid, force strict fallback
+    # - citations must be in range
+    # - on failure, retry once (common failure mode: missing/invalid citations)
     gr = enforce_strict_rag_answer(
         answer=answer,
         context_size=len(retrieved_chunks),
         require_citations=True,
     )
     if not gr.ok:
-        await session.log(f"[LOG] Guardrails triggered: {gr.reason} -> forcing fallback")
-        answer = STRICT_NO_MENTION
+        await session.log(f"[LOG] Guardrails triggered: {gr.reason} -> retrying once")
+        retry_user_prompt = (
+            "Your previous answer was rejected because it did not follow the required citation rules.\n"
+            "Re-answer the user's question using ONLY CONTEXT.\n\n"
+            "Output MUST be exactly one of:\n"
+            f'- "{STRICT_NO_MENTION}" (if the answer is not in CONTEXT)\n'
+            "- OR an answer that includes stacked citations like [1][2], where each n is between "
+            f"1 and {len(retrieved_chunks)}.\n\n"
+            "Do not add any extra commentary.\n"
+            f"Rejection reason: {gr.reason}\n"
+        )
+        retry_messages = list(messages)
+        retry_messages.append(
+            ChatMessage(role="assistant", content=f"Previous (invalid) answer:\n{answer}")
+        )
+        retry_messages.append(ChatMessage(role="user", content=retry_user_prompt))
+        try:
+            answer2 = await openrouter.chat_completion(
+                model=settings.chat_model,
+                messages=retry_messages,
+                temperature=0.0,
+            )
+        except OpenRouterError as e:
+            await session.log(f"[LOG] Chat retry failed: {e} -> forcing fallback")
+            answer = STRICT_NO_MENTION
+        else:
+            gr2 = enforce_strict_rag_answer(
+                answer=answer2,
+                context_size=len(retrieved_chunks),
+                require_citations=True,
+            )
+            if not gr2.ok:
+                await session.log(
+                    f"[LOG] Guardrails retry still failed: {gr2.reason} -> forcing fallback"
+                )
+                answer = STRICT_NO_MENTION
+            else:
+                answer = gr2.answer
     else:
         answer = gr.answer
 

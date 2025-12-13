@@ -1,0 +1,131 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+ERR (Ephemeral RAG Reader) is a privacy-first, session-based document Q&A webapp. Users upload a single document, the backend parses and chunks it, builds in-memory retrieval indexes (vector + BM25), and the frontend provides a chat UI that answers questions strictly using retrieved passages. "Ephemeral" means all ingestion artifacts and chat state are stored per-session in memory and cleaned up on TTL - nothing is written to a database.
+
+## Development Commands
+
+### Backend (FastAPI + Python)
+```bash
+# Setup
+python -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+
+# Configure environment
+cp backend/.env.example backend/.env
+# Edit backend/.env and set OPENROUTER_API_KEY
+
+# Run development server
+uvicorn backend.app.main:app --reload --port 8000
+
+# Health check
+curl http://localhost:8000/health
+
+# Run tests
+python -m unittest discover -s backend/tests -p "test_*.py"
+```
+
+### Frontend (Next.js 16 + TypeScript)
+```bash
+# Setup (from frontend/ directory)
+cd frontend
+npm install
+
+# Configure environment
+cp .env.example .env.local
+# Edit NEXT_PUBLIC_BACKEND_URL if backend runs on different port
+
+# Development server
+npm run dev  # Serves on http://localhost:3000
+
+# Linting
+npm run lint
+
+# Production build
+npm run build && npm run start
+```
+
+## Architecture & Key Components
+
+### Backend Architecture (`backend/app/`)
+- **Main Application**: [`main.py`](backend/app/main.py) - FastAPI app lifecycle, CORS, routes, ingestion/chat orchestration
+- **Configuration**: [`config.py`](backend/app/config.py) - Settings and env loading (supports `ENV_FILE=/path/to/.env`)
+- **OpenRouter Client**: [`openrouter_client.py`](backend/app/openrouter_client.py) - HTTP wrapper for chat + embeddings
+- **Session Store**: [`session_store.py`](backend/app/session_store.py) - In-memory sessions, locks, TTL cleanup
+- **Ingestion Pipeline**:
+  - [`ingestion/file_parser.py`](backend/app/ingestion/file_parser.py) - Multi-format document parser (epub, mobi, docx, txt, md)
+  - [`ingestion/chunker.py`](backend/app/ingestion/chunker.py) - Paragraph-based chunking with prev/next context
+- **Retrieval System**: [`retrieval/hybrid_retriever.py`](backend/app/retrieval/hybrid_retriever.py) - FAISS + BM25 hybrid search with fusion
+- **Guardrails**: [`guardrails.py`](backend/app/guardrails.py) - Strict RAG answer enforcement with citations
+
+### Frontend Architecture (`frontend/`)
+- **App Router**: [`app/`](frontend/app/) - Next.js 16 App Router pages and layouts
+- **Components**: [`components/`](frontend/components/) - React UI components (upload, chat, terminal, etc.)
+- **State Management**: [`lib/store.ts`](frontend/lib/store.ts) - Zustand store for session, upload status, chat history
+- **API Layer**: HTTP client backend communication using `NEXT_PUBLIC_BACKEND_URL`
+
+### Request Flow
+1. **Session Management**: Sessions identified via `X-Session-Id` header; new sessions created server-side if missing
+2. **Document Upload**: `POST /upload` → parse → chunk → embed → build indexes → stream logs via SSE
+3. **Chat**: `POST /chat` → query expansion (optional) → hybrid retrieval → strict RAG generation → guardrails enforcement
+4. **Real-time Logs**: `GET /api/logs/{session_id}` - Server-Sent Events for ingestion progress
+
+## Key Technical Details
+
+### Chunk Data Structure
+Each chunk includes:
+- `id`, `content`, `rich_content`
+- `prev_content`/`next_content` for context
+- `metadata` with chapter/heading information when available
+
+### Hybrid Retrieval
+- **Vector Search**: FAISS with cosine similarity (embeddings from qwen/qwen3-embedding-8b, dim=4096)
+- **Lexical Search**: BM25 with language-specific tokenization (jieba for Chinese, spacy for English)
+- **Fusion**: Weighted combination (0.8 vector + 0.2 BM25) with score normalization
+
+### Strict RAG Enforcement
+- Answers must be based solely on retrieved document passages
+- If document doesn't contain answer: "The document does not mention this."
+- Citations format: `[1][2]` stacked numbers referencing chunk IDs
+- Context limit guard: ~32k tokens with hard cutoff
+
+## Environment Configuration
+
+### Required Backend Environment Variables
+- `OPENROUTER_API_KEY` - OpenRouter API key for embeddings/chat models
+- `OPENROUTER_CHAT_MODEL` - Default: `google/gemini-2.5-flash`
+- `OPENROUTER_EMBEDDING_MODEL` - Default: `qwen/qwen3-embedding-8b`
+- `OPENROUTER_EMBEDDING_DIM` - Default: `4096`
+
+### Optional Backend Settings
+- `ERR_SESSION_TTL_SECONDS` - Session inactivity timeout (default: 1800s)
+- `ERR_SESSION_CLEANUP_INTERVAL_SECONDS` - Cleanup interval (default: 30s)
+- `ERR_CHAT_MODEL_CONTEXT_LIMIT_TOKENS` - Context limit guard (default: 32768)
+- `ERR_EMBEDDING_QUERY_USE_INSTRUCTION` - Enable instruction-based embeddings (default: true)
+- `ERR_EMBEDDING_QUERY_INSTRUCTION_TEMPLATE` - Template for embedding instructions
+
+### Frontend Environment
+- `NEXT_PUBLIC_BACKEND_URL` - Backend API base URL (default: `http://localhost:8000`)
+
+## File Format Support
+- **Documents**: `.epub`, `.mobi`, `.docx`, `.txt`, `.md`
+- **Parsing Strategy**: Extract text content while preserving chapter/heading structure in metadata
+- **Chunking**: Paragraph-based, ~500 tokens per chunk with prev/next context
+
+## Security & Privacy Considerations
+- All document processing happens in-memory only
+- No persistence of uploaded documents or chat history
+- Sessions automatically expire and are cleaned up
+- Be careful when adding logging to avoid writing document text or queries to disk
+- Never commit API keys or sensitive configuration
+
+## Development Notes
+- Use Python 4-space indentation, type hints preferred
+- Keep TypeScript `strict` enabled, avoid `any` types
+- Follow conventional commits (`feat:`, `fix:`, etc.)
+- Frontend uses `@/*` path alias for imports when it improves clarity
+- Run backend first, then frontend during development

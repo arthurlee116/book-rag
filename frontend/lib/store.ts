@@ -13,6 +13,9 @@ type ErrState = {
   sessionId: string | null;
   setSessionId: (id: string) => void;
 
+  topK: number;
+  setTopK: (k: number) => void;
+
   uploadStatus: UploadStatus;
   setUploadStatus: (s: UploadStatus) => void;
 
@@ -40,6 +43,12 @@ export const useErrStore = create<ErrState>((set, get) => ({
   sessionId: null,
   setSessionId: (id) => set({ sessionId: id }),
 
+  topK: 8,
+  setTopK: (k) => {
+    const kk = Math.max(1, Math.min(10, Math.floor(k)));
+    set({ topK: kk });
+  },
+
   uploadStatus: "idle",
   setUploadStatus: (s) => set({ uploadStatus: s }),
 
@@ -60,4 +69,3 @@ export const useErrStore = create<ErrState>((set, get) => ({
   activeChunk: null,
   setActiveChunk: (c) => set({ activeChunk: c })
 }));
-

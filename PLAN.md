@@ -9,19 +9,19 @@
 
 ## 0) Repo / DX 基础
 
-- [ ] 约定目录结构（推荐）
-  - [ ] `backend/`：FastAPI + RAG 逻辑（仅内存，不落库）
-  - [ ] `frontend/`：Next.js 16 App Router + Tailwind + Zustand
-  - [ ] `OpenRouter Files/`：OpenRouter 官方文档（已存在）
-- [ ] 定义环境变量（后续会写到 `backend/.env.example` & `frontend/.env.example`）
-  - [ ] `OPENROUTER_API_KEY`
-  - [ ] `OPENROUTER_BASE_URL=https://openrouter.ai/api/v1`
-  - [ ] `OPENROUTER_HTTP_REFERER=http://localhost:3000`
-  - [ ] `OPENROUTER_X_TITLE=ERR-App`
-- [ ] 明确“Ephemeral”策略
-  - [ ] `sessions: dict[session_id] -> {retriever, chunks, chat_history, logs, expires_at, ...}`
-  - [ ] Session TTL（例如 30min inactivity / 2h hard TTL）
-  - [ ] Single file per session：新上传覆盖旧文件（释放旧索引内存）
+- [x] 约定目录结构（推荐）
+  - [x] `backend/`：FastAPI + RAG 逻辑（仅内存，不落库）
+  - [x] `frontend/`：Next.js 16 App Router + Tailwind + Zustand
+  - [x] `OpenRouter Files/`：OpenRouter 官方文档（已存在）
+- [x] 定义环境变量（后续会写到 `backend/.env.example` & `frontend/.env.example`）
+  - [x] `OPENROUTER_API_KEY`
+  - [x] `OPENROUTER_BASE_URL=https://openrouter.ai/api/v1`
+  - [x] `OPENROUTER_HTTP_REFERER=http://localhost:3000`
+  - [x] `OPENROUTER_X_TITLE=ERR-App`
+- [x] 明确“Ephemeral”策略
+  - [x] `sessions: dict[session_id] -> {retriever, chunks, chat_history, logs, expires_at, ...}`
+  - [x] Session TTL（例如 30min inactivity / 2h hard TTL）
+  - [x] Single file per session：新上传覆盖旧文件（释放旧索引内存）
 
 ---
 
@@ -130,7 +130,7 @@
 
 ---
 
-## 5) Frontend（Next.js 14 + Tailwind + Zustand）
+## 5) Frontend（Next.js 16 + Tailwind + Zustand）
 
 ### 5.1 App 结构
 - [x] `frontend/app/` routes（App Router）

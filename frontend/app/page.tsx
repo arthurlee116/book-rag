@@ -27,7 +27,10 @@ export default function HomePage() {
   const uploadStatus = useErrStore((s) => s.uploadStatus);
   const rightPanelOpen = useErrStore((s) => s.rightPanelOpen);
 
-  const showTerminal = useMemo(() => uploadStatus === "processing", [uploadStatus]);
+  const showTerminal = useMemo(
+    () => uploadStatus === "processing" || uploadStatus === "error",
+    [uploadStatus]
+  );
 
   return (
     <main className="mx-auto max-w-[1400px] p-6">
@@ -76,4 +79,3 @@ export default function HomePage() {
     </main>
   );
 }
-

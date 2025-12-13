@@ -8,6 +8,7 @@ import { useErrStore } from "@/lib/store";
 export function TerminalWindow() {
   const backendUrl = useErrStore((s) => s.backendUrl);
   const sessionId = useErrStore((s) => s.sessionId);
+  const uploadStatus = useErrStore((s) => s.uploadStatus);
   const logs = useErrStore((s) => s.logs);
   const appendLog = useErrStore((s) => s.appendLog);
   const setUploadStatus = useErrStore((s) => s.setUploadStatus);
@@ -38,7 +39,9 @@ export function TerminalWindow() {
     <div className="overflow-hidden rounded-lg border border-zinc-800 bg-black">
       <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-200">
         <Terminal className="h-4 w-4" />
-        <span className="font-medium">Processing Logs</span>
+        <span className="font-medium">
+          {uploadStatus === "error" ? "Processing Logs (error)" : "Processing Logs"}
+        </span>
       </div>
       <div className="max-h-64 overflow-auto px-3 py-2 font-mono text-xs leading-5 text-zinc-100">
         {logs.length === 0 ? (
@@ -55,4 +58,3 @@ export function TerminalWindow() {
     </div>
   );
 }
-

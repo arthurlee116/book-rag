@@ -2,6 +2,10 @@
 
 Privacy-first, session-based document Q&A webapp (in-memory only) with hybrid retrieval.
 
+## Requirements
+
+- Node.js >= 20.9 (Next.js 16 requirement)
+
 ## Run backend
 
 ```bash
@@ -25,4 +29,3 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
-

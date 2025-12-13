@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Send } from "lucide-react";
 
 import { useErrStore } from "@/lib/store";
@@ -40,6 +40,8 @@ function renderWithCitationButtons(
 export function ChatPanel() {
   const backendUrl = useErrStore((s) => s.backendUrl);
   const sessionId = useErrStore((s) => s.sessionId);
+  const topK = useErrStore((s) => s.topK);
+  const setTopK = useErrStore((s) => s.setTopK);
   const uploadStatus = useErrStore((s) => s.uploadStatus);
   const messages = useErrStore((s) => s.messages);
   const addUserMessage = useErrStore((s) => s.addUserMessage);
@@ -51,10 +53,32 @@ export function ChatPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const scrollAreaRef = useRef<HTMLDivElement | null>(null);
+  const prevMessageCountRef = useRef(0);
+
   const canChat = useMemo(
     () => !!sessionId && uploadStatus === "ready" && !busy,
     [busy, sessionId, uploadStatus]
   );
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      prevMessageCountRef.current = 0;
+      return;
+    }
+
+    if (messages.length === prevMessageCountRef.current) return;
+    prevMessageCountRef.current = messages.length;
+
+    const last = messages[messages.length - 1];
+    if (last?.role !== "assistant") return;
+
+    requestAnimationFrame(() => {
+      const el = scrollAreaRef.current;
+      if (!el) return;
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    });
+  }, [messages]);
 
   const onSend = async () => {
     if (!canChat) return;
@@ -69,7 +93,7 @@ export function ChatPanel() {
     const resp = await fetch(`${backendUrl}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId, message: q, top_k: 5 })
+      body: JSON.stringify({ session_id: sessionId, message: q, top_k: topK })
     });
 
     if (!resp.ok) {
@@ -111,18 +135,37 @@ export function ChatPanel() {
     <div className="rounded-lg border border-zinc-800 bg-zinc-950/30 p-4">
       <div className="flex items-center justify-between">
         <div className="text-sm font-medium text-zinc-200">Chat</div>
-        <button
-          type="button"
-          onClick={onExport}
-          disabled={!sessionId}
-          className="inline-flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/30 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
-        >
-          <Download className="h-4 w-4" />
-          Export
-        </button>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-2 text-xs text-zinc-300">
+            <span className="text-zinc-400">Top-K</span>
+            <select
+              value={topK}
+              onChange={(e) => setTopK(parseInt(e.target.value, 10))}
+              disabled={busy}
+              className="rounded-md border border-zinc-800 bg-zinc-900/30 px-2 py-1 text-xs text-zinc-200 disabled:opacity-50"
+            >
+              <option value={5}>5</option>
+              <option value={8}>8</option>
+              <option value={10}>10</option>
+            </select>
+          </label>
+
+          <button
+            type="button"
+            onClick={onExport}
+            disabled={!sessionId}
+            className="inline-flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/30 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </button>
+        </div>
       </div>
 
-      <div className="mt-3 max-h-[420px] overflow-auto rounded-md border border-zinc-800 bg-zinc-950/40 p-3">
+      <div
+        ref={scrollAreaRef}
+        className="mt-3 max-h-[420px] overflow-auto rounded-md border border-zinc-800 bg-zinc-950/40 p-3"
+      >
         {messages.length === 0 ? (
           <div className="text-sm text-zinc-500">
             Upload a document, wait for “Ready.”, then ask a question.
@@ -179,4 +222,3 @@ export function ChatPanel() {
     </div>
   );
 }
-
