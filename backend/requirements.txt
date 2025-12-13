@@ -1,0 +1,27 @@
+# FastAPI server
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+
+# HTTP client (OpenRouter)
+httpx>=0.27
+tenacity>=8.2
+
+# SSE helpers (for /api/logs/{session_id})
+sse-starlette>=2.1
+
+# Parsing / ingestion
+ebooklib>=0.18
+python-docx>=1.1
+beautifulsoup4>=4.12
+lxml>=5.2
+
+# NLP + search
+jieba>=0.42.1
+spacy>=3.7
+rank-bm25>=0.2.2
+
+# Vector search
+numpy>=1.26
+faiss-cpu>=1.8
+
