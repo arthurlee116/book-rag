@@ -69,9 +69,60 @@
 
 ### Prerequisites
 
-- **Python 3.11+**
-- **Node.js 20.9+** (Next.js 16 requirement)
+- **Git** — Version control
+- **Python 3.11+** — Backend runtime
+- **Node.js 20.9+** — Frontend runtime (Next.js 16 requirement)
 - **OpenRouter API Key** — [Get one here](https://openrouter.ai/keys)
+
+<details>
+<summary>📥 <strong>New to development? Click here for installation guides</strong></summary>
+
+#### Git
+
+| Platform | Download |
+|----------|----------|
+| Windows | [Git for Windows (64-bit)](https://github.com/git-for-windows/git/releases/download/v2.52.0.windows.1/Git-2.52.0-64-bit.exe) |
+| macOS | Pre-installed, or run `xcode-select --install` |
+| Linux | `sudo apt install git` (Debian/Ubuntu) or `sudo dnf install git` (Fedora) |
+
+📖 [Official Git Installation Guide](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
+
+#### Python
+
+| Platform | Download |
+|----------|----------|
+| Windows | [Python 3.13 (64-bit)](https://www.python.org/ftp/python/3.13.1/python-3.13.1-amd64.exe) |
+| macOS | [Python 3.13 (.pkg)](https://www.python.org/ftp/python/3.13.1/python-3.13.1-macos11.pkg) |
+| Linux | `sudo apt install python3.11` or use [pyenv](https://github.com/pyenv/pyenv) |
+
+📖 [All Python Downloads](https://www.python.org/downloads/)
+
+> **Tip:** On Windows, check "Add Python to PATH" during installation.
+
+#### Node.js
+
+| Platform | Download |
+|----------|----------|
+| All Platforms | [Node.js 24 LTS Downloads](https://nodejs.org/en/download) |
+
+📖 Recommended: Use a version manager like [nvm](https://github.com/nvm-sh/nvm) (macOS/Linux) or [nvm-windows](https://github.com/coreybutler/nvm-windows)
+
+```bash
+# Using nvm (after installation)
+nvm install 24
+nvm use 24
+```
+
+#### Verify Installation
+
+```bash
+git --version    # Should show git version 2.x+
+python --version # Should show Python 3.11+
+node --version   # Should show v20.9.0+
+npm --version    # Should show 10.x+
+```
+
+</details>
 
 ### Option 1: Docker (Recommended)
 
