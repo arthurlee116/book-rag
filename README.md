@@ -15,6 +15,10 @@
   <em>Everything stays in memory. Nothing is stored. Your data is yours.</em>
 </p>
 
+<p align="center">
+  <strong>English</strong> | <a href="README.zh-CN.md">简体中文</a>
+</p>
+
 ---
 
 ## ✨ Features
