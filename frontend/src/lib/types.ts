@@ -12,4 +12,3 @@ export type ChatMessage = {
   content: string;
   citations?: ChunkModel[];
 };
-

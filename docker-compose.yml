@@ -6,8 +6,6 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # Load secrets/config from the mounted env file inside the container (avoids
-      # expanding secrets into `docker compose config` output).
       ENV_FILE: "/app/.env"
     volumes:
       - ./backend:/app
@@ -30,18 +28,12 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Browser-side base URL. Use same-origin and let Next proxy to the backend service.
-      NEXT_PUBLIC_BACKEND_URL: "/backend"
-      # Server-side proxy target (Docker network hostname).
-      BACKEND_INTERNAL_URL: "http://backend:8000"
-      # Make Next dev server bind to all interfaces inside the container.
-      HOSTNAME: "0.0.0.0"
-      PORT: "3000"
+      VITE_BACKEND_URL: "http://backend:8000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
     depends_on:
       backend:
         condition: service_healthy
-    command: npm run dev
+    command: npm run dev -- --host
     restart: unless-stopped

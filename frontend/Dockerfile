@@ -6,7 +6,6 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Copy sources so the image works even without bind mounts.
 COPY . /app
 
 EXPOSE 3000

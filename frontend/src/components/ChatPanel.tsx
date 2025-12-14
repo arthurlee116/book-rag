@@ -1,16 +1,16 @@
-"use client";
-
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Send } from "lucide-react";
-
+import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
+import { Button, Input, Select, Typography, Alert, Space } from "antd";
+import { SendOutlined, DownloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { useErrStore } from "@/lib/store";
 import type { ChunkModel } from "@/lib/types";
+
+const { Text } = Typography;
 
 function renderWithCitationButtons(
   text: string,
   citations: ChunkModel[] | undefined,
   onClick: (n: number) => void
-) {
+): ReactNode[] {
   const parts = text.split(/(\[\d+\])/g);
   return parts.map((p, idx) => {
     const m = p.match(/^\[(\d+)\]$/);
@@ -18,22 +18,27 @@ function renderWithCitationButtons(
       const n = parseInt(m[1], 10);
       const disabled = !citations || n < 1 || n > citations.length;
       return (
-        <button
+        <span
           key={idx}
-          type="button"
-          disabled={disabled}
-          onClick={() => onClick(n)}
-          className="mx-0.5 inline-flex items-center rounded border border-indigo-500/60 bg-indigo-500/10 px-1.5 py-0.5 text-xs text-indigo-200 hover:bg-indigo-500/20 disabled:opacity-40"
+          onClick={() => !disabled && onClick(n)}
+          style={{
+            display: "inline-block",
+            padding: "1px 6px",
+            margin: "0 2px",
+            fontSize: 11,
+            fontWeight: 500,
+            borderRadius: 4,
+            background: disabled ? "#3a3a3c" : "rgba(99, 102, 241, 0.2)",
+            color: disabled ? "#6e6e73" : "#818cf8",
+            cursor: disabled ? "not-allowed" : "pointer",
+            transition: "all 0.15s",
+          }}
         >
           [{n}]
-        </button>
+        </span>
       );
     }
-    return (
-      <span key={idx} className="whitespace-pre-wrap">
-        {p}
-      </span>
-    );
+    return <span key={idx} style={{ whiteSpace: "pre-wrap" }}>{p}</span>;
   });
 }
 
@@ -50,6 +55,7 @@ export function ChatPanel() {
   const addAssistantMessage = useErrStore((s) => s.addAssistantMessage);
   const openRightPanel = useErrStore((s) => s.openRightPanel);
   const setActiveChunk = useErrStore((s) => s.setActiveChunk);
+  const isDesktop = useErrStore((s) => s.isDesktop);
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -68,7 +74,6 @@ export function ChatPanel() {
       prevMessageCountRef.current = 0;
       return;
     }
-
     if (messages.length === prevMessageCountRef.current) return;
     prevMessageCountRef.current = messages.length;
 
@@ -95,7 +100,7 @@ export function ChatPanel() {
     const resp = await fetch(`${backendUrl}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId, message: q, top_k: topK, fast_mode: fastMode })
+      body: JSON.stringify({ session_id: sessionId, message: q, top_k: topK, fast_mode: fastMode }),
     });
 
     if (!resp.ok) {
@@ -134,72 +139,92 @@ export function ChatPanel() {
   };
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-950/30 p-4">
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-medium text-zinc-200">Chat</div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
+    <div style={{
+      background: "#1c1c1e",
+      borderRadius: 12,
+      padding: 16,
+      height: isDesktop ? "calc(100vh - 140px)" : "auto",
+      display: "flex",
+      flexDirection: "column",
+    }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <Text strong style={{ color: "#f5f5f7", fontSize: 13 }}>Chat</Text>
+        <Space size={8}>
+          <Button
+            size="small"
+            icon={<ThunderboltOutlined />}
             onClick={() => setFastMode(!fastMode)}
             disabled={busy}
-            aria-pressed={fastMode}
-            className={
-              "inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs transition-colors disabled:opacity-50 " +
-              (fastMode
-                ? "border-amber-500/50 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15"
-                : "border-zinc-800 bg-zinc-900/30 text-zinc-200 hover:bg-zinc-900")
-            }
-            title={
-              fastMode
-                ? "Fast mode ON: baseline retrieval (faster, may refuse more)"
-                : "Fast mode OFF: accurate retrieval (multi-query/HyDE/RRF/rerank)"
-            }
+            style={{
+              background: fastMode ? "rgba(245, 158, 11, 0.15)" : "#3a3a3c",
+              borderColor: "transparent",
+              color: fastMode ? "#f59e0b" : "#a1a1a6",
+            }}
           >
-            {fastMode ? "Fast: ON" : "Fast: OFF"}
-          </button>
-
-          <label className="flex items-center gap-2 text-xs text-zinc-300">
-            <span className="text-zinc-400">Top-K</span>
-            <select
-              value={topK}
-              onChange={(e) => setTopK(parseInt(e.target.value, 10))}
-              disabled={busy}
-              className="rounded-md border border-zinc-800 bg-zinc-900/30 px-2 py-1 text-xs text-zinc-200 disabled:opacity-50"
-            >
-              <option value={5}>5</option>
-              <option value={8}>8</option>
-              <option value={10}>10</option>
-            </select>
-          </label>
-
-          <button
-            type="button"
+            Fast
+          </Button>
+          <Select
+            size="small"
+            value={topK}
+            onChange={setTopK}
+            disabled={busy}
+            style={{ width: 75 }}
+            options={[
+              { value: 5, label: "Top 5" },
+              { value: 8, label: "Top 8" },
+              { value: 10, label: "Top 10" },
+            ]}
+          />
+          <Button
+            size="small"
+            icon={<DownloadOutlined />}
             onClick={onExport}
             disabled={!sessionId}
-            className="inline-flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/30 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
+            style={{ background: "#3a3a3c", borderColor: "transparent" }}
           >
-            <Download className="h-4 w-4" />
             Export
-          </button>
-        </div>
+          </Button>
+        </Space>
       </div>
 
+      {/* Messages */}
       <div
         ref={scrollAreaRef}
-        className="mt-3 max-h-[420px] overflow-auto rounded-md border border-zinc-800 bg-zinc-950/40 p-3"
+        style={{
+          flex: isDesktop ? 1 : undefined,
+          height: isDesktop ? undefined : 280,
+          overflow: "auto",
+          marginBottom: 16,
+          padding: 16,
+          background: "#2c2c2e",
+          borderRadius: 10,
+        }}
       >
         {messages.length === 0 ? (
-          <div className="text-sm text-zinc-500">
-            Upload a document, wait for “Ready.”, then ask a question.
-          </div>
+          <Text style={{ color: "#6e6e73" }}>
+            Upload a document, wait for "ready", then ask a question.
+          </Text>
         ) : (
-          <div className="space-y-4 text-sm">
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {messages.map((m, idx) => (
-              <div key={idx} className="rounded-md border border-zinc-800 bg-zinc-950/30 p-3">
-                <div className="text-xs font-medium text-zinc-400">
-                  {m.role === "user" ? "User" : "Assistant"}
-                </div>
-                <div className="mt-2 text-zinc-100">
+              <div
+                key={idx}
+                style={{
+                  maxWidth: "85%",
+                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 12,
+                    background: m.role === "user" ? "#6366f1" : "#2c2c2e",
+                    color: "#f5f5f7",
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                  }}
+                >
                   {m.role === "assistant"
                     ? renderWithCitationButtons(m.content, m.citations, (n) => onCitationClick(idx, n))
                     : m.content}
@@ -210,36 +235,26 @@ export function ChatPanel() {
         )}
       </div>
 
-      {error ? (
-        <div className="mt-3 rounded-md border border-red-900/60 bg-red-950/30 p-2 text-xs text-red-200">
-          {error}
-        </div>
-      ) : null}
+      {error && <Alert type="error" message={error} style={{ marginBottom: 12 }} showIcon />}
 
-      <div className="mt-3 flex items-center gap-2">
-        <input
+      {/* Input */}
+      <div style={{ display: "flex", gap: 10 }}>
+        <Input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") onSend();
-          }}
-          placeholder={
-            uploadStatus !== "ready"
-              ? "Upload and wait until Ready…"
-              : "Ask a question (strictly from the document)…"
-          }
+          onPressEnter={onSend}
+          placeholder={uploadStatus !== "ready" ? "Upload and wait..." : "Ask a question..."}
           disabled={!canChat}
-          className="w-full rounded-md border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 disabled:opacity-60"
+          style={{ flex: 1 }}
         />
-        <button
-          type="button"
+        <Button
+          type="primary"
+          icon={<SendOutlined />}
           onClick={onSend}
           disabled={!canChat}
-          className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
         >
-          <Send className="h-4 w-4" />
           Send
-        </button>
+        </Button>
       </div>
     </div>
   );

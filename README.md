@@ -37,7 +37,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         Frontend (Next.js 16)                    │
+│                    Frontend (Vite + React + Ant Design)          │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐ │
 │  │  Upload  │  │   Chat   │  │   Logs   │  │ Citation Viewer  │ │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────────┬─────────┘ │
@@ -75,58 +75,8 @@
 
 - **Git** — Version control
 - **Python 3.11+** — Backend runtime
-- **Node.js 20.9+** — Frontend runtime (Next.js 16 requirement)
+- **Node.js 18+** — Frontend runtime
 - **OpenRouter API Key** — [Get one here](https://openrouter.ai/keys)
-
-<details>
-<summary>📥 <strong>New to development? Click here for installation guides</strong></summary>
-
-#### Git
-
-| Platform | Download |
-|----------|----------|
-| Windows | [Git for Windows (64-bit)](https://github.com/git-for-windows/git/releases/download/v2.52.0.windows.1/Git-2.52.0-64-bit.exe) |
-| macOS | Pre-installed, or run `xcode-select --install` |
-| Linux | `sudo apt install git` (Debian/Ubuntu) or `sudo dnf install git` (Fedora) |
-
-📖 [Official Git Installation Guide](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
-
-#### Python
-
-| Platform | Download |
-|----------|----------|
-| Windows | [Python 3.13 (64-bit)](https://www.python.org/ftp/python/3.13.1/python-3.13.1-amd64.exe) |
-| macOS | [Python 3.13 (.pkg)](https://www.python.org/ftp/python/3.13.1/python-3.13.1-macos11.pkg) |
-| Linux | `sudo apt install python3.11` or use [pyenv](https://github.com/pyenv/pyenv) |
-
-📖 [All Python Downloads](https://www.python.org/downloads/)
-
-> **Tip:** On Windows, check "Add Python to PATH" during installation.
-
-#### Node.js
-
-| Platform | Download |
-|----------|----------|
-| All Platforms | [Node.js 24 LTS Downloads](https://nodejs.org/en/download) |
-
-📖 Recommended: Use a version manager like [nvm](https://github.com/nvm-sh/nvm) (macOS/Linux) or [nvm-windows](https://github.com/coreybutler/nvm-windows)
-
-```bash
-# Using nvm (after installation)
-nvm install 24
-nvm use 24
-```
-
-#### Verify Installation
-
-```bash
-git --version    # Should show git version 2.x+
-python --version # Should show Python 3.11+
-node --version   # Should show v20.9.0+
-npm --version    # Should show 10.x+
-```
-
-</details>
 
 ### Option 1: Docker (Recommended)
 
@@ -157,7 +107,7 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env and set OPENROUTER_API_KEY
 
-uvicorn backend.app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8000
 ```
 
 **Frontend:**
@@ -170,94 +120,6 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) 🎉
 
-## 📖 How It Works
-
-### 1. Document Ingestion
-
-When you upload a document:
-
-1. **Parse** — Extract text blocks from `.txt`, `.md`, `.docx`, `.epub`, or `.mobi`
-2. **Chunk** — Split into ~512-token chunks with 50-token overlap for context continuity
-3. **Embed** — Generate 4096-dim vectors using Qwen3-Embedding-8B via OpenRouter
-4. **Index** — Build FAISS (vector) + BM25 (keyword) indexes in memory
-
-### 2. Query Processing (Normal Mode)
-
-```
-User Query
-    │
-    ├─→ Language Alignment (translate if needed)
-    │
-    ├─→ Query Expansion
-    │   ├─→ Generate 6 query variants (Multi-Query)
-    │   └─→ Generate hypothetical passage (HyDE)
-    │
-    ├─→ Embed all variants (instruction-aware)
-    │
-    ├─→ Hybrid Search (per variant)
-    │   ├─→ FAISS: top-50 by vector similarity
-    │   └─→ BM25: top-50 by keyword match
-    │
-    ├─→ RRF Fusion (combine all rankings)
-    │
-    ├─→ LLM Rerank (judge relevance)
-    │
-    ├─→ Re-pack (reverse order for attention)
-    │
-    └─→ Generate Answer (with citations)
-```
-
-### 3. Fast Mode
-
-Toggle "Fast Mode" for quicker responses:
-
-| Feature | Normal Mode | Fast Mode |
-|---------|-------------|-----------|
-| Search Dimension | 4096 | 1024 (MRL) |
-| Query Expansion | ✅ Multi-Query + HyDE | ❌ |
-| LLM Rerank | ✅ | ❌ |
-| Re-packing | ✅ Reverse | ❌ |
-| Embedding Aggregation | Weighted | Simple Mean |
-
-## ⚙️ Configuration
-
-All settings are in `backend/.env`. Key options:
-
-```bash
-# Models
-# Simple tasks (translation, HyDE, QA) - use lighter/faster model
-OPENROUTER_CHAT_MODEL_SIMPLE=google/gemini-2.5-flash-lite-preview-09-2025
-# Complex tasks (multi-query expansion, LLM rerank) - use more capable model
-OPENROUTER_CHAT_MODEL_COMPLEX=google/gemini-2.5-flash-preview-09-2025
-OPENROUTER_EMBEDDING_MODEL=qwen/qwen3-embedding-8b
-
-# Retrieval Pipeline
-ERR_QUERY_FUSION_ENABLED=true      # Multi-query expansion
-ERR_HYDE_ENABLED=true              # Hypothetical document embedding
-ERR_LLM_RERANK_ENABLED=true        # LLM-based reranking
-ERR_REPACK_STRATEGY=reverse        # Put best chunks near query
-
-# Performance
-ERR_EMBEDDING_DIM_FAST_MODE=1024   # MRL dimension for fast mode
-ERR_SESSION_TTL_SECONDS=1800       # Session timeout (30 min)
-```
-
-> **Note:** `OPENROUTER_CHAT_MODEL` is deprecated and no longer used. Use `OPENROUTER_CHAT_MODEL_SIMPLE` and `OPENROUTER_CHAT_MODEL_COMPLEX` instead.
-
-See [`backend/.env.example`](backend/.env.example) for all options.
-
-## 🧪 Testing
-
-```bash
-# Backend unit tests
-cd backend
-python -m unittest discover -s tests -p "test_*.py"
-
-# Frontend lint
-cd frontend
-npm run lint
-```
-
 ## 📁 Project Structure
 
 ```
@@ -269,58 +131,52 @@ book-rag/
 │   │   ├── openrouter_client.py # OpenRouter API wrapper
 │   │   ├── session_store.py     # In-memory session management
 │   │   ├── guardrails.py        # Citation enforcement
-│   │   ├── ingestion/
-│   │   │   ├── file_parser.py   # Document parsing
-│   │   │   └── chunker.py       # Text chunking with overlap
-│   │   └── retrieval/
-│   │       └── hybrid_retriever.py  # FAISS + BM25 hybrid search
+│   │   ├── ingestion/           # Document parsing & chunking
+│   │   └── retrieval/           # FAISS + BM25 hybrid search
 │   ├── tests/
 │   ├── requirements.txt
 │   └── .env.example
 ├── frontend/
-│   ├── app/                     # Next.js App Router
-│   ├── components/
-│   │   ├── UploadPanel.tsx      # File upload UI
-│   │   ├── ChatPanel.tsx        # Chat interface
-│   │   └── TerminalWindow.tsx   # Ingestion logs
-│   └── lib/
-│       ├── store.ts             # Zustand state
-│       └── types.ts             # TypeScript types
-├── docker-compose.yml           # Dev environment
-└── docker-compose.prod.yml      # Production-like setup
+│   ├── src/
+│   │   ├── components/          # React components (Ant Design)
+│   │   ├── lib/                 # Zustand state & types
+│   │   ├── App.tsx              # Main app component
+│   │   ├── main.tsx             # Entry point
+│   │   ├── theme.ts             # Ant Design dark theme
+│   │   └── index.less           # Global styles
+│   ├── index.html
+│   ├── vite.config.ts
+│   └── package.json
+├── docker-compose.yml
+└── docker-compose.prod.yml
 ```
 
-## 🔬 Technical Highlights
+## ⚙️ Configuration
 
-### Qwen3-Embedding-8B
+Backend settings in `backend/.env`:
 
-We use the **#1 ranked model on MTEB Multilingual** (score: 70.58 as of June 2025):
+```bash
+OPENROUTER_API_KEY=your_key_here
+OPENROUTER_CHAT_MODEL_SIMPLE=google/gemini-2.5-flash-lite-preview-09-2025
+OPENROUTER_CHAT_MODEL_COMPLEX=google/gemini-2.5-flash-preview-09-2025
+OPENROUTER_EMBEDDING_MODEL=qwen/qwen3-embedding-8b
+```
 
-- **4096 dimensions** (full) or **1024 dimensions** (MRL fast mode)
-- **Instruction-aware** — queries use task-specific prompts for +1-5% accuracy
-- **100+ languages** including code
-- **32K context** for long documents
+Frontend settings in `frontend/.env.local`:
 
-### Hybrid Retrieval
+```bash
+VITE_BACKEND_URL=http://localhost:8000
+```
 
-Combines the best of both worlds:
+## 🧪 Testing
 
-- **FAISS (Dense)** — Semantic similarity via cosine distance
-- **BM25 (Sparse)** — Keyword matching for exact terms
-- **RRF Fusion** — Reciprocal Rank Fusion to merge rankings
+```bash
+# Backend unit tests
+cd backend && python -m unittest discover -s tests -p "test_*.py"
 
-### Privacy by Design
-
-- **No database** — Everything lives in memory
-- **TTL cleanup** — Sessions auto-expire after 30 minutes
-- **No logging of content** — Document text never hits disk
-
-## 🤝 Contributing
-
-1. Fork the repo
-2. Create a feature branch (`git checkout -b feat/amazing-feature`)
-3. Commit with [Conventional Commits](https://www.conventionalcommits.org/) (`git commit -m 'feat: add amazing feature'`)
-4. Push and open a PR
+# Frontend lint
+cd frontend && npm run lint
+```
 
 ## 📄 License
 
@@ -329,5 +185,5 @@ Combines the best of both worlds:
 ---
 
 <p align="center">
-  Built with ❤️ using FastAPI, Next.js, and Qwen3-Embedding
+  Built with ❤️ using FastAPI, Vite, React, and Ant Design
 </p>

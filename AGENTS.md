@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-ERR (Ephemeral RAG Reader) is a privacy-first document Q&A web app. Users upload a document, the backend parses and chunks it, builds in-memory retrieval indexes (vector + BM25), and the frontend provides a chat UI that answers questions strictly using retrieved passages. “Ephemeral” is intentional: ingestion artifacts and chat state are per-session in memory with TTL cleanup; nothing is written to a database by default.
+ERR (Ephemeral RAG Reader) is a privacy-first document Q&A web app. Users upload a document, the backend parses and chunks it, builds in-memory retrieval indexes (vector + BM25), and the frontend provides a chat UI that answers questions strictly using retrieved passages. "Ephemeral" is intentional: ingestion artifacts and chat state are per-session in memory with TTL cleanup; nothing is written to a database by default.
 
 ## Project Structure & Module Organization
 
@@ -14,20 +14,23 @@ ERR (Ephemeral RAG Reader) is a privacy-first document Q&A web app. Users upload
   - `backend/app/ingestion/`: file parsing and chunking (`file_parser.py`, `chunker.py`).
   - `backend/app/retrieval/`: hybrid retriever and indexing (`hybrid_retriever.py`).
   - `backend/app/guardrails.py`: strict answer enforcement (citations / fallback behavior).
-- `frontend/`: Next.js 16 + React + TypeScript UI:
-  - `frontend/app/`: App Router pages/layouts; main UI entrypoints.
-  - `frontend/components/`: UI components (upload, chat, logs/status panels).
-  - `frontend/lib/`: API helpers, state, and shared utilities.
+- `frontend/`: Vite + React + Ant Design + TypeScript UI:
+  - `frontend/src/main.tsx`: React entry point with Ant Design ConfigProvider.
+  - `frontend/src/App.tsx`: main application component.
+  - `frontend/src/theme.ts`: Ant Design dark theme token configuration.
+  - `frontend/src/components/`: UI components (UploadPanel, ChatPanel, TerminalWindow, DocumentPanel).
+  - `frontend/src/lib/`: Zustand state (`store.ts`) and TypeScript types (`types.ts`).
+  - `frontend/vite.config.ts`: Vite configuration with API proxy.
 
-Keep boundaries clear: the frontend talks to the backend over HTTP using `NEXT_PUBLIC_BACKEND_URL`; do not share runtime code across the boundary.
+Keep boundaries clear: the frontend talks to the backend over HTTP using `VITE_BACKEND_URL`; do not share runtime code across the boundary.
 
 ## Architecture & Request Flow
 
-1. Frontend starts at `http://localhost:3000` and reads `NEXT_PUBLIC_BACKEND_URL` from `frontend/.env.local`.
+1. Frontend starts at `http://localhost:3000` and reads `VITE_BACKEND_URL` from `frontend/.env.local`.
 2. A session is identified via an HTTP header (the backend accepts an `X-Session-Id` style header); if missing, a new session is created server-side.
 3. Upload:
    - The frontend uploads a document to the backend (`POST /upload`).
-   - The backend parses it into text “blocks”, then chunks blocks into ~500-token chunks.
+   - The backend parses it into text "blocks", then chunks blocks into ~500-token chunks.
    - The backend calls OpenRouter embeddings in batches and builds in-memory indexes: FAISS for vectors and BM25 for lexical matching.
    - Ingestion logs are streamed over Server-Sent Events (`GET /api/logs/{session_id}`) to show progress in the UI.
 4. Chat (Normal Mode):
@@ -60,8 +63,9 @@ From `frontend/`:
 
 - Install deps: `npm install`
 - Dev server: `npm run dev` (serves on http://localhost:3000)
-- Lint: `npm run lint` (ESLint flat config)
-- Production build: `npm run build && npm run start`
+- Lint: `npm run lint`
+- Production build: `npm run build`
+- Preview production build: `npm run preview`
 
 Tip: run backend first, then frontend. If the backend port changes, update `frontend/.env.local`.
 
@@ -70,11 +74,12 @@ Tip: run backend first, then frontend. If the backend port changes, update `fron
 - Python:
   - 4-space indentation, type hints preferred, and predictable error handling for API routes.
   - Keep imports lightweight at package import time so tooling can run without heavy deps (see `backend/app/models/__init__.py`).
-  - Prefer small, pure helpers for parsing/chunking/retrieval so they’re testable without spinning up FastAPI.
+  - Prefer small, pure helpers for parsing/chunking/retrieval so they're testable without spinning up FastAPI.
 - TypeScript/React:
   - Keep TypeScript `strict` enabled (`frontend/tsconfig.json`); avoid `any`.
-  - Follow ESLint rules in `frontend/eslint.config.mjs` (React hooks rules + Next core-web-vitals).
-  - Use the `@/*` path alias for imports when helpful.
+  - Follow ESLint rules in `frontend/eslint.config.js`.
+  - Use the `@/*` path alias for imports (maps to `src/*`).
+  - Use Ant Design components for UI; customize via `theme.ts` tokens.
 - Naming:
   - Python: `snake_case` for functions/vars, `PascalCase` for classes.
   - React: components `PascalCase`, hooks `useThing`, event handlers `onThing`.
@@ -109,7 +114,9 @@ Tip: run backend first, then frontend. If the backend port changes, update `fron
   - `ERR_QUERY_FUSION_ENABLED`, `ERR_HYDE_ENABLED`, `ERR_LLM_RERANK_ENABLED`: retrieval pipeline toggles.
   - `ERR_REPACK_STRATEGY`: context ordering ("reverse" or "forward").
   - `ERR_EMBEDDING_DIM_FAST_MODE`: MRL dimension for fast mode (default: 1024).
-- **Note:** `OPENROUTER_CHAT_MODEL` is deprecated and no longer used.
+- Frontend env highlights (see `frontend/.env.example`):
+  - `VITE_BACKEND_URL`: backend API URL. Default: `http://localhost:8000`
+- **Note:** `OPENROUTER_CHAT_MODEL` and `NEXT_PUBLIC_BACKEND_URL` are deprecated and no longer used.
 - Treat uploaded documents as sensitive:
   - Keep processing in-memory unless explicitly changing the privacy model.
   - Be careful when adding logging; avoid writing raw document text or user queries to disk.
@@ -117,6 +124,6 @@ Tip: run backend first, then frontend. If the backend port changes, update `fron
 ## Troubleshooting
 
 - `OPENROUTER_API_KEY is not set`: ensure `backend/.env` exists and contains `OPENROUTER_API_KEY=...` or export it in your shell.
-- Frontend cannot reach backend: confirm `NEXT_PUBLIC_BACKEND_URL` in `frontend/.env.local` matches the running backend (default `http://localhost:8000`).
+- Frontend cannot reach backend: confirm `VITE_BACKEND_URL` in `frontend/.env.local` matches the running backend (default `http://localhost:8000`).
 - Port conflict: run `uvicorn ... --port 8001` and update `frontend/.env.local`.
 - Slow ingestion: large documents embed in batches; optimize chunk size, batch size, or model choice first.

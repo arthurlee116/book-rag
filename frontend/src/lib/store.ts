@@ -1,5 +1,3 @@
-"use client";
-
 import { create } from "zustand";
 import type { ChatMessage, ChunkModel } from "@/lib/types";
 
@@ -38,8 +36,18 @@ type ErrState = {
   setActiveChunk: (c: ChunkModel | null) => void;
 };
 
+// Use /backend proxy path in Docker, or direct URL for local dev
+const getBackendUrl = () => {
+  const envUrl = import.meta.env.VITE_BACKEND_URL;
+  // If URL contains docker internal hostname, use proxy path instead
+  if (envUrl && envUrl.includes("backend:")) {
+    return "/backend";
+  }
+  return envUrl || "http://localhost:8000";
+};
+
 export const useErrStore = create<ErrState>((set, get) => ({
-  backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000",
+  backendUrl: getBackendUrl(),
   isDesktop: true,
   setIsDesktop: (v) => set({ isDesktop: v }),
 
@@ -73,5 +81,5 @@ export const useErrStore = create<ErrState>((set, get) => ({
   closeRightPanel: () => set({ rightPanelOpen: false }),
 
   activeChunk: null,
-  setActiveChunk: (c) => set({ activeChunk: c })
+  setActiveChunk: (c) => set({ activeChunk: c }),
 }));

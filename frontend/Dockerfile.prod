@@ -8,15 +8,9 @@ FROM ${NODE_BASE_IMAGE} AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules /app/node_modules
 COPY . /app
-RUN mkdir -p /app/public
 
-# These need to be present at build-time because:
-# - NEXT_PUBLIC_* is inlined into client bundles
-# - rewrites are materialized into the routes manifest at build time
-ARG NEXT_PUBLIC_BACKEND_URL=/backend
-ARG BACKEND_INTERNAL_URL=http://backend:8000
-ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
-ENV BACKEND_INTERNAL_URL=$BACKEND_INTERNAL_URL
+ARG VITE_BACKEND_URL=/backend
+ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
 
 RUN npm run build
 
@@ -24,12 +18,9 @@ FROM ${NODE_BASE_IMAGE} AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY --from=builder /app/package.json /app/package.json
-COPY --from=builder /app/package-lock.json /app/package-lock.json
-COPY --from=builder /app/node_modules /app/node_modules
-COPY --from=builder /app/.next /app/.next
-COPY --from=builder /app/public /app/public
-COPY --from=builder /app/next.config.js /app/next.config.js
+RUN npm install -g serve
+
+COPY --from=builder /app/dist /app/dist
 
 EXPOSE 3000
-CMD ["npm", "run", "start", "--", "-H", "0.0.0.0"]
+CMD ["serve", "-s", "dist", "-l", "3000"]
