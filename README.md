@@ -170,7 +170,10 @@ All settings are in `backend/.env`. Key options:
 
 ```bash
 # Models
-OPENROUTER_CHAT_MODEL=google/gemini-2.5-flash
+# Simple tasks (translation, HyDE, QA) - use lighter/faster model
+OPENROUTER_CHAT_MODEL_SIMPLE=google/gemini-2.5-flash-lite-preview-09-2025
+# Complex tasks (multi-query expansion, LLM rerank) - use more capable model
+OPENROUTER_CHAT_MODEL_COMPLEX=google/gemini-2.5-flash-preview-09-2025
 OPENROUTER_EMBEDDING_MODEL=qwen/qwen3-embedding-8b
 
 # Retrieval Pipeline
@@ -183,6 +186,8 @@ ERR_REPACK_STRATEGY=reverse        # Put best chunks near query
 ERR_EMBEDDING_DIM_FAST_MODE=1024   # MRL dimension for fast mode
 ERR_SESSION_TTL_SECONDS=1800       # Session timeout (30 min)
 ```
+
+> **Note:** `OPENROUTER_CHAT_MODEL` is deprecated and no longer used. Use `OPENROUTER_CHAT_MODEL_SIMPLE` and `OPENROUTER_CHAT_MODEL_COMPLEX` instead.
 
 See [`backend/.env.example`](backend/.env.example) for all options.
 

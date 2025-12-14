@@ -85,7 +85,24 @@ Each chunk includes:
 ### Hybrid Retrieval
 - **Vector Search**: FAISS with cosine similarity (embeddings from qwen/qwen3-embedding-8b, dim=4096)
 - **Lexical Search**: BM25 with language-specific tokenization (jieba for Chinese, spacy for English)
-- **Fusion**: Weighted combination (0.8 vector + 0.2 BM25) with score normalization
+- **Fusion**: Weighted combination (0.8 vector + 0.2 BM25) with per-query MinMax normalization
+
+### Advanced Retrieval Pipeline (Normal Mode)
+The full retrieval pipeline includes several optional stages:
+1. **Language Alignment**: Translate query to document language if needed (uses `chat_model_simple`)
+2. **Multi-Query Expansion**: Generate 6 query variants for better recall (uses `chat_model_complex`)
+3. **HyDE**: Generate hypothetical passage to improve semantic matching (uses `chat_model_simple`)
+4. **Hybrid Search**: FAISS + BM25 per query variant
+5. **RRF Fusion**: Reciprocal Rank Fusion to merge rankings from all variants (k=60)
+6. **Drift Filtering**: Remove off-topic query variants (similarity threshold: 0.25)
+7. **LLM Rerank**: Judge passage relevance with LLM (uses `chat_model_complex`)
+8. **Re-packing**: Reorder chunks (default: reverse, best chunks near query for attention)
+
+### Fast Mode
+Toggle fast mode for quicker responses with reduced accuracy:
+- Uses 1024-dim MRL embeddings instead of 4096
+- Disables multi-query expansion, HyDE, and LLM rerank
+- Uses simple mean for embedding aggregation
 
 ### Strict RAG Enforcement
 - Answers must be based solely on retrieved document passages
@@ -97,9 +114,12 @@ Each chunk includes:
 
 ### Required Backend Environment Variables
 - `OPENROUTER_API_KEY` - OpenRouter API key for embeddings/chat models
-- `OPENROUTER_CHAT_MODEL` - Default: `google/gemini-2.5-flash`
+- `OPENROUTER_CHAT_MODEL_SIMPLE` - Model for simple tasks (translation, HyDE, QA). Default: `google/gemini-2.5-flash-lite-preview-09-2025`
+- `OPENROUTER_CHAT_MODEL_COMPLEX` - Model for complex tasks (multi-query expansion, LLM rerank). Default: `google/gemini-2.5-flash-preview-09-2025`
 - `OPENROUTER_EMBEDDING_MODEL` - Default: `qwen/qwen3-embedding-8b`
 - `OPENROUTER_EMBEDDING_DIM` - Default: `4096`
+
+> **Note:** `OPENROUTER_CHAT_MODEL` is deprecated and no longer used.
 
 ### Optional Backend Settings
 - `ERR_SESSION_TTL_SECONDS` - Session inactivity timeout (default: 1800s)
@@ -107,6 +127,11 @@ Each chunk includes:
 - `ERR_CHAT_MODEL_CONTEXT_LIMIT_TOKENS` - Context limit guard (default: 32768)
 - `ERR_EMBEDDING_QUERY_USE_INSTRUCTION` - Enable instruction-based embeddings (default: true)
 - `ERR_EMBEDDING_QUERY_INSTRUCTION_TEMPLATE` - Template for embedding instructions
+- `ERR_EMBEDDING_DIM_FAST_MODE` - MRL dimension for fast mode (default: 1024)
+- `ERR_QUERY_FUSION_ENABLED` - Enable multi-query expansion (default: true)
+- `ERR_HYDE_ENABLED` - Enable hypothetical document embedding (default: true)
+- `ERR_LLM_RERANK_ENABLED` - Enable LLM-based reranking (default: true)
+- `ERR_REPACK_STRATEGY` - Context ordering: "reverse" (best at end) or "forward" (default: reverse)
 
 ### Frontend Environment
 - `NEXT_PUBLIC_BACKEND_URL` - Backend API base URL (default: `http://localhost:8000`)

@@ -30,9 +30,22 @@ Keep boundaries clear: the frontend talks to the backend over HTTP using `NEXT_P
    - The backend parses it into text “blocks”, then chunks blocks into ~500-token chunks.
    - The backend calls OpenRouter embeddings in batches and builds in-memory indexes: FAISS for vectors and BM25 for lexical matching.
    - Ingestion logs are streamed over Server-Sent Events (`GET /api/logs/{session_id}`) to show progress in the UI.
-4. Chat:
-   - The frontend sends a user question; the backend embeds the query (with optional instruction templating), retrieves candidate chunks via hybrid retrieval, then calls the chat model with strict constraints.
+4. Chat (Normal Mode):
+   - The frontend sends a user question; the backend runs the full retrieval pipeline:
+     1. Language alignment (translate query to document language if needed)
+     2. Multi-query expansion (generate 6 query variants using `chat_model_complex`)
+     3. HyDE (generate hypothetical passage using `chat_model_simple`)
+     4. Hybrid search (FAISS + BM25) per query variant
+     5. RRF fusion (merge rankings with k=60)
+     6. Drift filtering (remove off-topic variants)
+     7. LLM rerank (judge relevance using `chat_model_complex`)
+     8. Re-packing (reorder chunks, default: reverse)
+   - The backend generates the answer using `chat_model_simple` with strict RAG constraints.
    - The backend post-processes the model output using guardrails to enforce citation behavior.
+5. Chat (Fast Mode):
+   - Uses 1024-dim MRL embeddings instead of 4096
+   - Skips multi-query expansion, HyDE, and LLM rerank
+   - Faster but potentially lower recall
 
 ## Build, Test, and Development Commands
 
@@ -86,11 +99,17 @@ Tip: run backend first, then frontend. If the backend port changes, update `fron
 - Never commit secrets. Use `backend/.env.example` → `backend/.env` and `frontend/.env.example` → `frontend/.env.local`.
 - Backend env highlights (see `backend/.env.example`):
   - `OPENROUTER_API_KEY`: required for embeddings/chat.
-  - `OPENROUTER_CHAT_MODEL`, `OPENROUTER_EMBEDDING_MODEL`: model selection.
-  - `OPENROUTER_EMBEDDING_DIM`: expected dim (backend can warn on mismatch).
+  - `OPENROUTER_CHAT_MODEL_SIMPLE`: model for simple tasks (translation, HyDE, QA generation). Default: `google/gemini-2.5-flash-lite-preview-09-2025`
+  - `OPENROUTER_CHAT_MODEL_COMPLEX`: model for complex tasks (multi-query expansion, LLM rerank). Default: `google/gemini-2.5-flash-preview-09-2025`
+  - `OPENROUTER_EMBEDDING_MODEL`: embedding model selection. Default: `qwen/qwen3-embedding-8b`
+  - `OPENROUTER_EMBEDDING_DIM`: expected dim (backend can warn on mismatch). Default: `4096`
   - `ERR_SESSION_TTL_SECONDS`, `ERR_SESSION_CLEANUP_INTERVAL_SECONDS`: in-memory session lifecycle.
   - `ERR_CHAT_MODEL_CONTEXT_LIMIT_TOKENS`: guardrail against oversized prompts.
   - `ERR_EMBEDDING_QUERY_*`: instruction templating for retrieval.
+  - `ERR_QUERY_FUSION_ENABLED`, `ERR_HYDE_ENABLED`, `ERR_LLM_RERANK_ENABLED`: retrieval pipeline toggles.
+  - `ERR_REPACK_STRATEGY`: context ordering ("reverse" or "forward").
+  - `ERR_EMBEDDING_DIM_FAST_MODE`: MRL dimension for fast mode (default: 1024).
+- **Note:** `OPENROUTER_CHAT_MODEL` is deprecated and no longer used.
 - Treat uploaded documents as sensitive:
   - Keep processing in-memory unless explicitly changing the privacy model.
   - Be careful when adding logging; avoid writing raw document text or user queries to disk.
