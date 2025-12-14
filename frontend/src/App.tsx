@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Layout, Typography, Alert, Row, Col } from "antd";
+import { Layout, Typography, Row, Col } from "antd";
 import { UploadPanel } from "@/components/UploadPanel";
 import { ChatPanel } from "@/components/ChatPanel";
 import { TerminalWindow } from "@/components/TerminalWindow";
