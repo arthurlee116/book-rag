@@ -729,7 +729,7 @@ async def chat(
     await session.log("[LOG] Chat: generating answer (strict RAG)...")
     try:
         answer = await openrouter.chat_completion(
-            model=settings.chat_model,
+            model=settings.chat_model_simple,
             messages=messages,
             temperature=0.0,
         )
@@ -764,7 +764,7 @@ async def chat(
         retry_messages.append(ChatMessage(role="user", content=retry_user_prompt))
         try:
             answer2 = await openrouter.chat_completion(
-                model=settings.chat_model,
+                model=settings.chat_model_simple,
                 messages=retry_messages,
                 temperature=0.0,
             )

@@ -163,7 +163,7 @@ class OpenRouterClient:
         )
         user = f"Document language: {doc_language}\nUser query: {query}"
         translated = await self.chat_completion(
-            model=self.settings.chat_model,
+            model=self.settings.chat_model_simple,
             messages=[ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
             temperature=0.0,
         )
@@ -246,7 +246,7 @@ class OpenRouterClient:
             f"Generate {n} variants in the document language. Keep each variant short."
         )
         raw = await self.chat_completion(
-            model=self.settings.chat_model,
+            model=self.settings.chat_model_complex,
             messages=[ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
             temperature=0.0,
         )
@@ -308,7 +308,7 @@ class OpenRouterClient:
             f"Write one passage (<= {max_words} words) that would help retrieve the right part of the document."
         )
         passage = await self.chat_completion(
-            model=self.settings.chat_model,
+            model=self.settings.chat_model_simple,
             messages=[
                 ChatMessage(role="system", content=system),
                 ChatMessage(role="user", content=user),
@@ -336,7 +336,7 @@ class OpenRouterClient:
             return [pid for pid, _ in passages]
 
         max_chars = max(200, min(int(max_chars), 4000))
-        effective_model = (model or "").strip() or self.settings.chat_model
+        effective_model = (model or "").strip() or self.settings.chat_model_complex
 
         # Build a compact candidate list.
         lines: list[str] = []
