@@ -10,6 +10,9 @@ type ErrState = {
   isDesktop: boolean;
   setIsDesktop: (v: boolean) => void;
 
+  fastMode: boolean;
+  setFastMode: (v: boolean) => void;
+
   sessionId: string | null;
   setSessionId: (id: string) => void;
 
@@ -39,6 +42,9 @@ export const useErrStore = create<ErrState>((set, get) => ({
   backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000",
   isDesktop: true,
   setIsDesktop: (v) => set({ isDesktop: v }),
+
+  fastMode: false,
+  setFastMode: (v) => set({ fastMode: v }),
 
   sessionId: null,
   setSessionId: (id) => set({ sessionId: id }),

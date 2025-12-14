@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import { ChatPanel } from "@/components/ChatPanel";
@@ -24,13 +24,7 @@ function useIsDesktop() {
 
 export default function HomePage() {
   const isDesktop = useIsDesktop();
-  const uploadStatus = useErrStore((s) => s.uploadStatus);
   const rightPanelOpen = useErrStore((s) => s.rightPanelOpen);
-
-  const showTerminal = useMemo(
-    () => uploadStatus === "processing" || uploadStatus === "error",
-    [uploadStatus]
-  );
 
   return (
     <main className="mx-auto max-w-[1400px] p-6">
@@ -58,11 +52,9 @@ export default function HomePage() {
             </div>
             <div className="p-4">
               <UploadPanel />
-              {showTerminal ? (
-                <div className="mt-4">
-                  <TerminalWindow />
-                </div>
-              ) : null}
+              <div className="mt-4">
+                <TerminalWindow />
+              </div>
               <div className="mt-4">
                 <ChatPanel />
               </div>

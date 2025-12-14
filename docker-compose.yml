@@ -1,0 +1,47 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # Load secrets/config from the mounted env file inside the container (avoids
+      # expanding secrets into `docker compose config` output).
+      ENV_FILE: "/app/.env"
+    volumes:
+      - ./backend:/app
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      # Browser-side base URL. Use same-origin and let Next proxy to the backend service.
+      NEXT_PUBLIC_BACKEND_URL: "/backend"
+      # Server-side proxy target (Docker network hostname).
+      BACKEND_INTERNAL_URL: "http://backend:8000"
+      # Make Next dev server bind to all interfaces inside the container.
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy
+    command: npm run dev
+    restart: unless-stopped

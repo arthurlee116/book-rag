@@ -1,0 +1,57 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      ENV_FILE: "/app/.env"
+      # IMPORTANT: ERR stores sessions and ingestion state in-memory.
+      # Multiple workers will split memory across processes and break session-based flows
+      # (upload/logs/chat may hit different workers). Keep this at 1 unless you add a
+      # shared session store or load-balancer sticky sessions.
+      UVICORN_WORKERS: "1"
+    volumes:
+      - ./backend/.env:/app/.env:ro
+    command:
+      - sh
+      - -c
+      - >
+        uvicorn app.main:app
+        --host 0.0.0.0
+        --port 8000
+        --workers $${UVICORN_WORKERS:-1}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_BACKEND_URL: "/backend"
+        BACKEND_INTERNAL_URL: "http://backend:8000"
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: "production"
+      NEXT_PUBLIC_BACKEND_URL: "/backend"
+      BACKEND_INTERNAL_URL: "http://backend:8000"
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    depends_on:
+      backend:
+        condition: service_healthy
+    command:
+      - npm
+      - run
+      - start
+      - --
+      - -H
+      - "0.0.0.0"
+    restart: unless-stopped

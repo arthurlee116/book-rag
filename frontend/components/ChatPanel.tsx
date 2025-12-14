@@ -42,6 +42,8 @@ export function ChatPanel() {
   const sessionId = useErrStore((s) => s.sessionId);
   const topK = useErrStore((s) => s.topK);
   const setTopK = useErrStore((s) => s.setTopK);
+  const fastMode = useErrStore((s) => s.fastMode);
+  const setFastMode = useErrStore((s) => s.setFastMode);
   const uploadStatus = useErrStore((s) => s.uploadStatus);
   const messages = useErrStore((s) => s.messages);
   const addUserMessage = useErrStore((s) => s.addUserMessage);
@@ -93,7 +95,7 @@ export function ChatPanel() {
     const resp = await fetch(`${backendUrl}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId, message: q, top_k: topK })
+      body: JSON.stringify({ session_id: sessionId, message: q, top_k: topK, fast_mode: fastMode })
     });
 
     if (!resp.ok) {
@@ -136,6 +138,26 @@ export function ChatPanel() {
       <div className="flex items-center justify-between">
         <div className="text-sm font-medium text-zinc-200">Chat</div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setFastMode(!fastMode)}
+            disabled={busy}
+            aria-pressed={fastMode}
+            className={
+              "inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs transition-colors disabled:opacity-50 " +
+              (fastMode
+                ? "border-amber-500/50 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15"
+                : "border-zinc-800 bg-zinc-900/30 text-zinc-200 hover:bg-zinc-900")
+            }
+            title={
+              fastMode
+                ? "Fast mode ON: baseline retrieval (faster, may refuse more)"
+                : "Fast mode OFF: accurate retrieval (multi-query/HyDE/RRF/rerank)"
+            }
+          >
+            {fastMode ? "Fast: ON" : "Fast: OFF"}
+          </button>
+
           <label className="flex items-center gap-2 text-xs text-zinc-300">
             <span className="text-zinc-400">Top-K</span>
             <select
