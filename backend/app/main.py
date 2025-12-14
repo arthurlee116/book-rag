@@ -19,6 +19,7 @@ from .openrouter_client import OpenRouterClient, OpenRouterError
 from .openrouter_client import ChatMessage
 from .retrieval.fusion import dedupe_keep_order, rrf_fuse
 from .retrieval.hybrid_retriever import HybridRetriever
+from .repacking import apply_repack_strategy
 from .session_store import ChatTurn, cleanup_expired_sessions, get_or_create_session, get_session
 
 
@@ -109,9 +110,9 @@ async def _ingest_file(
         return
 
     await session.log(f"[LOG] Extracted {len(blocks)} blocks")
-    await session.log("[LOG] Chunking into ~500-token chunks...")
+    await session.log(f"[LOG] Chunking into ~{settings.chunk_target_tokens}-token chunks (overlap={settings.chunk_overlap_tokens})...")
 
-    chunker = Chunker(target_tokens=500)
+    chunker = Chunker(target_tokens=settings.chunk_target_tokens, overlap_tokens=settings.chunk_overlap_tokens)
     chunks = chunker.chunk(blocks=blocks)
     await session.log(f"[LOG] Created {len(chunks)} chunks")
     if not chunks:
@@ -319,6 +320,22 @@ def _unique_nonempty(items: list[str]) -> list[str]:
     return out
 
 
+def _weighted_embedding_mean(embeddings, *, decay: float = 0.7):
+    """
+    Weighted average of embeddings. First embedding gets weight 1.0,
+    subsequent ones decay exponentially (0.7^i).
+    """
+    import numpy as np
+    embs = np.asarray(embeddings, dtype=np.float32)
+    if embs.ndim != 2 or embs.shape[0] == 0:
+        return embs[0] if embs.shape[0] > 0 else embs
+    n = embs.shape[0]
+    weights = np.array([decay ** i for i in range(n)], dtype=np.float32)
+    weights /= weights.sum()
+    return np.average(embs, axis=0, weights=weights).astype(np.float32)
+
+
+
 def _build_embedding_query_inputs(*, settings: Settings, queries: list[str]) -> list[str]:
     """
     Build embedding inputs for user queries, optionally using instruction-aware format.
@@ -429,16 +446,20 @@ async def chat(
             raise HTTPException(status_code=500, detail="Unexpected embedding response shape")
 
         import numpy as np
-
+        # Fast mode: simple mean (no weighted aggregation)
         query_embedding = np.mean(q_embs, axis=0, dtype=np.float32)
 
-        await session.log("[LOG] Chat: hybrid retrieval (FAISS + BM25)...")
+        # Fast mode: use MRL (Matryoshka) lower dimension for faster search
+        search_dim = settings.embedding_dim_fast_mode
+        await session.log(f"[LOG] Chat: hybrid retrieval with MRL (dim={search_dim})...")
         scored = retriever.search(
             query=user_query,
             query_embedding=query_embedding,
             expanded_query=expanded_query,
             top_k=req.top_k,
+            search_dim=search_dim,
         )
+        # Fast mode: no re-packing, keep original order
         retrieved_chunks = [s.chunk for s in scored]
     else:
         base_query = (expanded_query or "").strip() or user_query
@@ -515,10 +536,11 @@ async def chat(
             return float(np.dot(aa, bb) / denom)
 
         query_vecs: dict[str, np.ndarray] = {}
+        aggregation_decay = float(settings.embedding_aggregation_decay)
         for q, sl in slices.items():
             if q == "__hyde__":
                 continue
-            vec = np.mean(q_embs[sl], axis=0, dtype=np.float32)
+            vec = _weighted_embedding_mean(q_embs[sl], decay=aggregation_decay)
             query_vecs[q] = vec
 
         base_vec = query_vecs.get(base_query)
@@ -551,7 +573,7 @@ async def chat(
         hyde_vec: np.ndarray | None = None
         hyde_slice = slices.get("__hyde__")
         if hyde_slice is not None:
-            hyde_vec = np.mean(q_embs[hyde_slice], axis=0, dtype=np.float32)
+            hyde_vec = _weighted_embedding_mean(q_embs[hyde_slice], decay=aggregation_decay)
             if base_vec is None:
                 use_hyde = True
             else:
@@ -651,6 +673,28 @@ async def chat(
 
         # Final selection for answer context.
         retrieved_chunks = candidate_chunks[: req.top_k]
+
+    # Re-pack: respect fast-mode intent and the configured strategy.
+    repack_strategy = (settings.repack_strategy or "reverse").strip().lower()
+    if req.fast_mode:
+        await session.log("[LOG] Chat: fast mode -> skipping re-packing.")
+    else:
+        if repack_strategy in {"forward", "none", "off", "disabled", "disable"}:
+            await session.log(f"[LOG] Chat: re-pack strategy '{repack_strategy}' -> keeping order.")
+        elif repack_strategy == "reverse":
+            await session.log("[LOG] Chat: re-pack strategy 'reverse' -> reversing order.")
+        else:
+            await session.log(
+                f"[LOG] WARNING: unknown ERR_REPACK_STRATEGY='{repack_strategy}', defaulting to 'reverse'."
+            )
+            repack_strategy = "reverse"
+
+    retrieved_chunks = apply_repack_strategy(
+        retrieved_chunks,
+        fast_mode=req.fast_mode,
+        repack_strategy=repack_strategy,
+    )
+
     context_blocks = _build_context_blocks(chunks=retrieved_chunks, include_neighbors=True)
     context_text = "\n\n".join(context_blocks)
 

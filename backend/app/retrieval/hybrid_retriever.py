@@ -192,7 +192,15 @@ class HybridRetriever:
         query_embedding: np.ndarray,
         expanded_query: str | None = None,
         top_k: int = 5,
+        search_dim: int | None = None,
     ) -> list[ScoredChunk]:
+        """
+        Search for relevant chunks.
+        
+        Args:
+            search_dim: If specified, use MRL (Matryoshka) truncation - only use first N dimensions
+                       for vector search. This speeds up search with minimal accuracy loss.
+        """
         if top_k < 1:
             raise ValueError("top_k must be >= 1")
         if self._faiss_index is None or self._bm25 is None or self._doc_embeddings is None:
@@ -205,17 +213,33 @@ class HybridRetriever:
             raise ValueError(
                 f"query_embedding dim mismatch: expected {self.embedding_dim}, got {query_embedding.shape[1]}"
             )
-        query_embedding = _l2_normalize(query_embedding)
+        
+        # MRL: truncate to search_dim if specified
+        use_mrl = search_dim is not None and 0 < search_dim < self.embedding_dim
+        if use_mrl:
+            query_emb_search = _l2_normalize(query_embedding[:, :search_dim])
+            doc_emb_search = _l2_normalize(self._doc_embeddings[:, :search_dim])
+        else:
+            query_emb_search = _l2_normalize(query_embedding)
+            doc_emb_search = self._doc_embeddings  # already normalized
 
-        # Phase A: Vector candidates (FAISS top-N).
+        # Phase A: Vector candidates (direct cosine computation for MRL, or FAISS for full dim)
         n_docs = len(self._chunks)
         vec_fetch_k = min(max(top_k, self.candidate_k), n_docs)
-        vec_scores, vec_ids = self._faiss_index.search(query_embedding, vec_fetch_k)
-        vec_ids_list = [int(i) for i in vec_ids[0] if int(i) >= 0]
+        
+        if use_mrl:
+            # Direct computation for MRL (no pre-built index for truncated dims)
+            scores = (query_emb_search @ doc_emb_search.T).flatten()
+            vec_ids_list = np.argsort(-scores)[:vec_fetch_k].tolist()
+            vec_scores_flat = scores[vec_ids_list]
+        else:
+            vec_scores_raw, vec_ids = self._faiss_index.search(query_emb_search, vec_fetch_k)
+            vec_ids_list = [int(i) for i in vec_ids[0] if int(i) >= 0]
+            vec_scores_flat = vec_scores_raw[0][: len(vec_ids_list)]
 
         # Convert cosine [-1, 1] -> [0, 1] (spec expects 0..1).
         vec_scores_map: dict[int, float] = {}
-        for idx, score in zip(vec_ids_list, vec_scores[0][: len(vec_ids_list)]):
+        for idx, score in zip(vec_ids_list, vec_scores_flat):
             cos = float(score)
             vec_scores_map[idx] = float(np.clip((cos + 1.0) * 0.5, 0.0, 1.0))
 
@@ -254,8 +278,11 @@ class HybridRetriever:
         for idx in candidate_ids:
             vector_score = vec_scores_map.get(idx)
             if vector_score is None:
-                # Not in FAISS top list; compute cosine directly for the candidate.
-                cos = float(np.dot(self._doc_embeddings[idx], query_embedding[0]))
+                # Not in top list; compute cosine directly for the candidate.
+                if use_mrl:
+                    cos = float(np.dot(doc_emb_search[idx], query_emb_search[0]))
+                else:
+                    cos = float(np.dot(self._doc_embeddings[idx], query_emb_search[0]))
                 vector_score = float(np.clip((cos + 1.0) * 0.5, 0.0, 1.0))
 
             bm25_norm = bm25_norm_map.get(idx, 0.0)

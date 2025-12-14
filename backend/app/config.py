@@ -13,12 +13,23 @@ class Settings(BaseModel):
     chat_model: str = "google/gemini-2.5-flash"
     embedding_model: str = "qwen/qwen3-embedding-8b"
     embedding_dim: int = 4096
+    embedding_dim_fast_mode: int = 1024  # MRL: use lower dimension in fast mode for speed
     embedding_query_use_instruction: bool = True
     embedding_query_include_raw: bool = True
     embedding_query_instruction_template: str = "Instruct: {task}\nQuery:{query}"
     embedding_query_task: str = (
         "Given a question, retrieve relevant passages from the document that explicitly contain the answer."
     )
+
+    # Chunking
+    chunk_target_tokens: int = 512
+    chunk_overlap_tokens: int = 50
+
+    # Re-packing strategy: "forward" (default order), "reverse" (most relevant at end)
+    repack_strategy: str = "reverse"
+
+    # Query embedding aggregation decay factor (0.7 means each subsequent embedding has 0.7x weight)
+    embedding_aggregation_decay: float = 0.7
 
     # Retrieval (recall-oriented)
     query_fusion_enabled: bool = True
@@ -145,6 +156,7 @@ def load_settings() -> Settings:
         chat_model=os.getenv("OPENROUTER_CHAT_MODEL", "google/gemini-2.5-flash"),
         embedding_model=os.getenv("OPENROUTER_EMBEDDING_MODEL", "qwen/qwen3-embedding-8b"),
         embedding_dim=getenv_int("OPENROUTER_EMBEDDING_DIM", 4096),
+        embedding_dim_fast_mode=getenv_int("ERR_EMBEDDING_DIM_FAST_MODE", 1024),
         embedding_query_use_instruction=getenv_bool(
             "ERR_EMBEDDING_QUERY_USE_INSTRUCTION", True
         ),
@@ -157,6 +169,10 @@ def load_settings() -> Settings:
             "ERR_EMBEDDING_QUERY_TASK",
             "Given a question, retrieve relevant passages from the document that explicitly contain the answer.",
         ),
+        chunk_target_tokens=getenv_int("ERR_CHUNK_TARGET_TOKENS", 512),
+        chunk_overlap_tokens=getenv_int("ERR_CHUNK_OVERLAP_TOKENS", 50),
+        repack_strategy=os.getenv("ERR_REPACK_STRATEGY", "reverse"),
+        embedding_aggregation_decay=getenv_float("ERR_EMBEDDING_AGGREGATION_DECAY", 0.7),
         query_fusion_enabled=getenv_bool("ERR_QUERY_FUSION_ENABLED", True),
         query_variants_count=getenv_int("ERR_QUERY_VARIANTS_COUNT", 6),
         query_variants_max=getenv_int("ERR_QUERY_VARIANTS_MAX", 8),

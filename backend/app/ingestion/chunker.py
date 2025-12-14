@@ -22,8 +22,9 @@ def estimate_tokens(text: str) -> int:
 
 
 class Chunker:
-    def __init__(self, *, target_tokens: int = 500) -> None:
+    def __init__(self, *, target_tokens: int = 512, overlap_tokens: int = 50) -> None:
         self.target_tokens = target_tokens
+        self.overlap_tokens = overlap_tokens
 
     def chunk(self, *, blocks: list[ParsedBlock]) -> list[ChunkModel]:
         chunks: list[ChunkModel] = []
@@ -31,12 +32,15 @@ class Chunker:
         buf_rich: list[str] = []
         buf_meta: dict[str, Any] = {}
         buf_tokens = 0
+        overlap_text: list[str] = []
+        overlap_rich: list[str] = []
 
         def flush() -> None:
-            nonlocal buf_text, buf_rich, buf_meta, buf_tokens, chunks
+            nonlocal buf_text, buf_rich, buf_meta, buf_tokens, chunks, overlap_text, overlap_rich
             content = "\n\n".join([t for t in buf_text if t.strip()]).strip()
             if not content:
                 buf_text, buf_rich, buf_meta, buf_tokens = [], [], {}, 0
+                overlap_text, overlap_rich = [], []
                 return
 
             rich_content = "<br/><br/>".join([t for t in buf_rich if t.strip()]).strip()
@@ -54,6 +58,20 @@ class Chunker:
                     },
                 )
             )
+
+            # Build overlap from end of current buffer
+            if self.overlap_tokens > 0:
+                overlap_text, overlap_rich = [], []
+                collected = 0
+                for txt, rich in zip(reversed(buf_text), reversed(buf_rich)):
+                    t = estimate_tokens(txt)
+                    if collected + t <= self.overlap_tokens:
+                        overlap_text.insert(0, txt)
+                        overlap_rich.insert(0, rich)
+                        collected += t
+                    else:
+                        break
+
             buf_text, buf_rich, buf_meta, buf_tokens = [], [], {}, 0
 
         for block in blocks:
@@ -64,6 +82,12 @@ class Chunker:
 
             if buf_tokens > 0 and (buf_tokens + block_tokens) > self.target_tokens:
                 flush()
+                # Start new chunk with overlap from previous
+                if overlap_text:
+                    buf_text = overlap_text[:]
+                    buf_rich = overlap_rich[:]
+                    buf_tokens = sum(estimate_tokens(t) for t in buf_text)
+                    overlap_text, overlap_rich = [], []
 
             buf_text.append(block_text)
             buf_rich.append(block.rich_text.strip() or block_text)
