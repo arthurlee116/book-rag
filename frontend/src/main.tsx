@@ -27,16 +27,32 @@ function Root() {
   const [shouldLoadApp, setShouldLoadApp] = useState(false);
 
   useEffect(() => {
+    let idleId: number | null = null;
+    let timeoutId: number | null = null;
+
     const load = () => setShouldLoadApp(true);
     const idle = (window as Window & {
       requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+      cancelIdleCallback?: (handle: number) => void;
     }).requestIdleCallback;
+    const cancelIdle = (window as Window & {
+      cancelIdleCallback?: (handle: number) => void;
+    }).cancelIdleCallback;
 
     if (idle) {
-      idle(load, { timeout: 1200 });
+      idleId = idle(load, { timeout: 1200 });
     } else {
-      setTimeout(load, 300);
+      timeoutId = window.setTimeout(load, 300);
     }
+
+    return () => {
+      if (idleId !== null && cancelIdle) {
+        cancelIdle(idleId);
+      }
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
   }, []);
 
   return (
