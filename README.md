@@ -178,6 +178,94 @@ cd backend && python -m unittest discover -s tests -p "test_*.py"
 cd frontend && npm run lint
 ```
 
+## 🚀 Production Deployment
+
+### Server Info
+
+- **Domain**: https://bookembed.net
+- **Server**: Tencent Cloud (Hong Kong)
+- **IP**: 43.159.200.246
+- **OS**: Ubuntu 24.04
+- **User**: ubuntu
+
+### Deployment Steps
+
+1. **SSH to server and clone repo**:
+```bash
+ssh ubuntu@43.159.200.246
+cd ~ && git clone https://github.com/arthurlee116/book-rag.git
+```
+
+2. **Copy `.env` file** (from local machine):
+```bash
+scp backend/.env ubuntu@43.159.200.246:~/book-rag/backend/.env
+```
+
+3. **Fix `docker-compose.prod.yml`** (remove frontend command override):
+```bash
+cd ~/book-rag
+# Remove the "command:" section under frontend service
+# The Dockerfile.prod CMD should be used instead
+```
+
+4. **Start services**:
+```bash
+cd ~/book-rag
+sudo docker compose -f docker-compose.prod.yml up -d --build
+```
+
+5. **Verify**:
+```bash
+sudo docker compose -f docker-compose.prod.yml ps
+curl http://localhost:8000/health
+curl http://localhost:3000
+```
+
+### Caddy Configuration
+
+Caddy is used as reverse proxy with automatic HTTPS (Let's Encrypt).
+
+**Install Caddy** (Ubuntu):
+```bash
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update && sudo apt install caddy
+```
+
+**Caddyfile** (`/etc/caddy/Caddyfile`):
+```
+bookembed.net {
+    reverse_proxy localhost:3000
+
+    handle /backend/* {
+        uri strip_prefix /backend
+        reverse_proxy localhost:8000
+    }
+}
+```
+
+**Restart Caddy**:
+```bash
+sudo systemctl restart caddy
+```
+
+### Useful Commands
+
+```bash
+# View logs
+sudo docker compose -f ~/book-rag/docker-compose.prod.yml logs -f
+
+# Restart services
+sudo docker compose -f ~/book-rag/docker-compose.prod.yml restart
+
+# Update and redeploy
+cd ~/book-rag && git pull && sudo docker compose -f docker-compose.prod.yml up -d --build
+
+# Check Caddy status
+sudo systemctl status caddy
+```
+
 ## 📄 License
 
 [Apache 2.0](LICENSE)

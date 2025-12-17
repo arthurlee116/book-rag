@@ -34,24 +34,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        NEXT_PUBLIC_BACKEND_URL: "/backend"
-        BACKEND_INTERNAL_URL: "http://backend:8000"
+        VITE_BACKEND_URL: "/backend"
     ports:
       - "3000:3000"
     environment:
       NODE_ENV: "production"
-      NEXT_PUBLIC_BACKEND_URL: "/backend"
-      BACKEND_INTERNAL_URL: "http://backend:8000"
-      PORT: "3000"
-      HOSTNAME: "0.0.0.0"
     depends_on:
       backend:
         condition: service_healthy
-    command:
-      - npm
-      - run
-      - start
-      - --
-      - -H
-      - "0.0.0.0"
     restart: unless-stopped

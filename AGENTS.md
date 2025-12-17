@@ -121,9 +121,53 @@ Tip: run backend first, then frontend. If the backend port changes, update `fron
   - Keep processing in-memory unless explicitly changing the privacy model.
   - Be careful when adding logging; avoid writing raw document text or user queries to disk.
 
+## Production Deployment
+
+### Server Info
+- **Domain**: https://bookembed.net
+- **Server**: Tencent Cloud (Hong Kong)
+- **IP**: 43.159.200.246
+- **OS**: Ubuntu 24.04
+- **User**: ubuntu
+
+### Key Files on Server
+- Project: `~/book-rag`
+- Caddy config: `/etc/caddy/Caddyfile`
+- Docker Compose: `docker-compose.prod.yml`
+
+### Caddy Reverse Proxy
+Caddy handles HTTPS (auto Let's Encrypt) and routes:
+- `https://bookembed.net/*` → frontend (localhost:3000)
+- `https://bookembed.net/backend/*` → backend (localhost:8000, with `/backend` prefix stripped)
+
+### Deployment Commands
+```bash
+# SSH to server
+ssh ubuntu@43.159.200.246
+
+# Update and redeploy
+cd ~/book-rag && git pull && sudo docker compose -f docker-compose.prod.yml up -d --build
+
+# View logs
+sudo docker compose -f ~/book-rag/docker-compose.prod.yml logs -f
+
+# Restart services
+sudo docker compose -f ~/book-rag/docker-compose.prod.yml restart
+
+# Check Caddy
+sudo systemctl status caddy
+sudo systemctl restart caddy
+```
+
+### Important Notes
+- The `docker-compose.prod.yml` frontend service should NOT have a `command:` override; use Dockerfile.prod's CMD (`serve -s dist -l 3000`).
+- Frontend build requires `VITE_BACKEND_URL=/backend` in `.env.production` (handled by Dockerfile.prod ARG).
+- Backend `.env` must be copied separately (not in git): `scp backend/.env ubuntu@43.159.200.246:~/book-rag/backend/.env`
+
 ## Troubleshooting
 
 - `OPENROUTER_API_KEY is not set`: ensure `backend/.env` exists and contains `OPENROUTER_API_KEY=...` or export it in your shell.
 - Frontend cannot reach backend: confirm `VITE_BACKEND_URL` in `frontend/.env.local` matches the running backend (default `http://localhost:8000`).
 - Port conflict: run `uvicorn ... --port 8001` and update `frontend/.env.local`.
 - Slow ingestion: large documents embed in batches; optimize chunk size, batch size, or model choice first.
+- Production frontend not connecting to backend: ensure `VITE_BACKEND_URL=/backend` is set during build, and Caddy is properly configured to proxy `/backend/*` to the backend service.

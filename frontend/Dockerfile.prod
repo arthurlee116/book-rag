@@ -10,7 +10,7 @@ COPY --from=deps /app/node_modules /app/node_modules
 COPY . /app
 
 ARG VITE_BACKEND_URL=/backend
-ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
+RUN echo "VITE_BACKEND_URL=${VITE_BACKEND_URL}" > .env.production
 
 RUN npm run build
 

@@ -154,3 +154,58 @@ Toggle fast mode for quicker responses with reduced accuracy:
 - Follow conventional commits (`feat:`, `fix:`, etc.)
 - Frontend uses `@/*` path alias for imports when it improves clarity
 - Run backend first, then frontend during development
+
+## Production Deployment
+
+### Server Info
+- **Domain**: https://bookembed.net
+- **Server**: Tencent Cloud (Hong Kong)
+- **IP**: 43.159.200.246
+- **OS**: Ubuntu 24.04
+- **User**: ubuntu
+
+### Key Files on Server
+- Project: `~/book-rag`
+- Caddy config: `/etc/caddy/Caddyfile`
+- Docker Compose: `docker-compose.prod.yml`
+
+### Caddy Reverse Proxy Configuration
+Caddy handles HTTPS (auto Let's Encrypt) with this config (`/etc/caddy/Caddyfile`):
+```
+bookembed.net {
+    reverse_proxy localhost:3000
+
+    handle /backend/* {
+        uri strip_prefix /backend
+        reverse_proxy localhost:8000
+    }
+}
+```
+
+Routes:
+- `https://bookembed.net/*` → frontend (localhost:3000)
+- `https://bookembed.net/backend/*` → backend (localhost:8000, `/backend` prefix stripped)
+
+### Deployment Commands
+```bash
+# SSH to server
+ssh ubuntu@43.159.200.246
+
+# Update and redeploy
+cd ~/book-rag && git pull && sudo docker compose -f docker-compose.prod.yml up -d --build
+
+# View logs
+sudo docker compose -f ~/book-rag/docker-compose.prod.yml logs -f
+
+# Restart services
+sudo docker compose -f ~/book-rag/docker-compose.prod.yml restart
+
+# Check Caddy
+sudo systemctl status caddy
+sudo systemctl restart caddy
+```
+
+### Important Notes
+- The `docker-compose.prod.yml` frontend service should NOT have a `command:` override; use Dockerfile.prod's CMD (`serve -s dist -l 3000`).
+- Frontend build requires `VITE_BACKEND_URL=/backend` (handled by Dockerfile.prod ARG creating `.env.production`).
+- Backend `.env` must be copied separately (not in git): `scp backend/.env ubuntu@43.159.200.246:~/book-rag/backend/.env`
