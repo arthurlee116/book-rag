@@ -227,9 +227,13 @@ class HybridRetriever:
         n_docs = len(self._chunks)
         vec_fetch_k = min(max(top_k, self.candidate_k), n_docs)
         
+        # Pre-compute variable to hold all MRL scores if available
+        all_scores_mrl = None
+
         if use_mrl:
             # Direct computation for MRL (no pre-built index for truncated dims)
             scores = (query_emb_search @ doc_emb_search.T).flatten()
+            all_scores_mrl = scores
             vec_ids_list = np.argsort(-scores)[:vec_fetch_k].tolist()
             vec_scores_flat = scores[vec_ids_list]
         else:
@@ -274,17 +278,30 @@ class HybridRetriever:
         # Phase C: Candidate union and fusion.
         candidate_ids = set(vec_ids_list) | set(int(i) for i in bm25_top_idx.tolist())
 
+        # Compute vector scores for candidates missing from the vector search top-k
+        missing_indices = [idx for idx in candidate_ids if idx not in vec_scores_map]
+        if missing_indices:
+            if all_scores_mrl is not None:
+                # Optimized MRL: O(1) lookup since we computed all scores
+                for idx in missing_indices:
+                    cos = float(all_scores_mrl[idx])
+                    vec_scores_map[idx] = float(np.clip((cos + 1.0) * 0.5, 0.0, 1.0))
+            else:
+                # Optimized Vectorization: Compute all missing scores in one batch (M, D) @ (1, D).T
+                # instead of iterating with np.dot one by one.
+                missing_vecs = self._doc_embeddings[missing_indices]
+                # (M, Dim) @ (1, Dim).T -> (M, 1)
+                missing_scores = missing_vecs @ query_emb_search.T
+                missing_scores_flat = missing_scores.reshape(-1)
+
+                for idx, raw_score in zip(missing_indices, missing_scores_flat):
+                    cos = float(raw_score)
+                    vec_scores_map[idx] = float(np.clip((cos + 1.0) * 0.5, 0.0, 1.0))
+
         scored: list[ScoredChunk] = []
         for idx in candidate_ids:
-            vector_score = vec_scores_map.get(idx)
-            if vector_score is None:
-                # Not in top list; compute cosine directly for the candidate.
-                if use_mrl:
-                    cos = float(np.dot(doc_emb_search[idx], query_emb_search[0]))
-                else:
-                    cos = float(np.dot(self._doc_embeddings[idx], query_emb_search[0]))
-                vector_score = float(np.clip((cos + 1.0) * 0.5, 0.0, 1.0))
-
+            # All candidates should now be in vec_scores_map
+            vector_score = vec_scores_map.get(idx, 0.0)  # fallback 0.0 just in case
             bm25_norm = bm25_norm_map.get(idx, 0.0)
             final = (self.vector_weight * vector_score) + (self.bm25_weight * bm25_norm)
             scored.append(
