@@ -73,10 +73,47 @@ async function runLighthouse() {
         },
       );
 
-      const tbtMs = Math.round(runnerResult.lhr.audits["total-blocking-time"].numericValue);
-      const performanceScore = runnerResult.lhr.categories.performance.score;
+      const lhr = runnerResult && runnerResult.lhr;
+      if (!lhr) {
+        throw new Error("Lighthouse result is missing the 'lhr' property.");
+      }
+
+      if (!lhr.audits || !lhr.categories || !lhr.categories.performance) {
+        throw new Error(
+          "Unexpected Lighthouse result structure: missing 'audits' or 'categories.performance'.",
+        );
+      }
+
+      const tbtAudit = lhr.audits["total-blocking-time"];
+      if (!tbtAudit || typeof tbtAudit.numericValue !== "number") {
+        throw new Error(
+          "Lighthouse 'total-blocking-time' audit is missing or has a non-numeric 'numericValue'.",
+        );
+      }
+
+      const performanceScore = lhr.categories.performance.score;
+      if (typeof performanceScore !== "number") {
+        throw new Error(
+          "Lighthouse 'performance' category score is missing or not a number.",
+        );
+      }
+
+      if (
+        typeof baselineTbtMs !== "number" ||
+        !Number.isFinite(baselineTbtMs) ||
+        baselineTbtMs <= 0
+      ) {
+        throw new Error(
+          "Invalid BASELINE_TBT_MS value. Expected a positive finite number.",
+        );
+      }
+
+      const tbtMs = Math.round(tbtAudit.numericValue);
       const improvementMs = baselineTbtMs - tbtMs;
-      const improvementPct = Number(((improvementMs / baselineTbtMs) * 100).toFixed(2));
+      const improvementPct =
+        baselineTbtMs === 0
+          ? 0
+          : Number(((improvementMs / baselineTbtMs) * 100).toFixed(2));
 
       await mkdir(path.join(projectRoot, "benchmark"), { recursive: true });
       const outputPath = path.join(projectRoot, "benchmark", "desktop-lighthouse.json");
