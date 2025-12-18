@@ -12,6 +12,10 @@ const previewPort = 4173;
 const targetUrl = `http://localhost:${previewPort}`;
 const baselineTbtMs = Number(process.env.BASELINE_TBT_MS || 190);
 const chromePath = process.env.CHROME_PATH || puppeteer.executablePath();
+const shouldOverwriteBaseline = process.env.LIGHTHOUSE_WRITE_BASELINE === "1";
+const outputFilename =
+  process.env.LIGHTHOUSE_OUTPUT_FILE ||
+  (shouldOverwriteBaseline ? "desktop-lighthouse.json" : "desktop-lighthouse.latest.json");
 
 async function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -55,7 +59,14 @@ async function runLighthouse() {
   try {
     await waitForServer(targetUrl);
     const chrome = await launchChrome({
-      chromeFlags: ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage"],
+      chromeFlags: [
+        "--headless=new",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-background-timer-throttling",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-renderer-backgrounding",
+      ],
       chromePath,
     });
 
@@ -67,6 +78,8 @@ async function runLighthouse() {
           output: "json",
           preset: "desktop",
           onlyCategories: ["performance"],
+          throttlingMethod: "devtools",
+          logLevel: "warn",
         },
         {
           extends: "lighthouse:default",
@@ -116,7 +129,7 @@ async function runLighthouse() {
           : Number(((improvementMs / baselineTbtMs) * 100).toFixed(2));
 
       await mkdir(path.join(projectRoot, "benchmark"), { recursive: true });
-      const outputPath = path.join(projectRoot, "benchmark", "desktop-lighthouse.json");
+      const outputPath = path.join(projectRoot, "benchmark", outputFilename);
       await writeFile(
         outputPath,
         JSON.stringify(
