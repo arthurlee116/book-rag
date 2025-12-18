@@ -86,7 +86,20 @@ export default function App() {
                 </Col>
                 {rightPanelOpen && (
                   <Col span={8}>
-                    <DocumentPanel />
+                    <Suspense
+                      fallback={
+                        <div
+                          style={{
+                            background: "#1c1c1e",
+                            borderRadius: 16,
+                            minHeight: 520,
+                            opacity: 0.65,
+                          }}
+                        />
+                      }
+                    >
+                      <DocumentPanel />
+                    </Suspense>
                   </Col>
                 )}
               </Row>
@@ -108,7 +121,20 @@ export default function App() {
 
             {!isDesktop && rightPanelOpen && (
               <div style={{ marginTop: 16 }}>
-                <DocumentPanel />
+                <Suspense
+                  fallback={
+                    <div
+                      style={{
+                        background: "#1c1c1e",
+                        borderRadius: 16,
+                        minHeight: 360,
+                        opacity: 0.65,
+                      }}
+                    />
+                  }
+                >
+                  <DocumentPanel />
+                </Suspense>
               </div>
             )}
           </Suspense>
