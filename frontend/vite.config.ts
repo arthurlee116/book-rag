@@ -24,6 +24,18 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    build: {
+      manifest: true,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            react: ["react", "react-dom"],
+            antd: ["antd", "@ant-design/icons"],
+            state: ["zustand"],
+          },
+        },
+      },
+    },
     css: {
       preprocessorOptions: {
         less: {
