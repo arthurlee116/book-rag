@@ -1,0 +1,27 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd ~/book-rag
+            git pull
+            sudo docker compose -f docker-compose.prod.yml up -d --build
+
+      - name: Health check
+        run: |
+          sleep 30
+          curl -f https://bookembed.net/backend/health || exit 1
+          curl -f https://bookembed.net || exit 1
+          echo "✅ Deployment successful"

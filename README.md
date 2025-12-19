@@ -266,6 +266,25 @@ cd ~/book-rag && git pull && sudo docker compose -f docker-compose.prod.yml up -
 sudo systemctl status caddy
 ```
 
+### CI/CD Automatic Deployment
+
+The project uses GitHub Actions for automatic deployment. Every push to `main` branch triggers:
+
+1. SSH to server and pull latest code
+2. Rebuild and restart Docker containers
+3. Health check on both frontend and backend
+
+**Workflow file**: `.github/workflows/deploy.yml`
+
+**Required GitHub Secrets**:
+| Secret | Description |
+|--------|-------------|
+| `DEPLOY_HOST` | Server IP address |
+| `DEPLOY_USER` | SSH username |
+| `DEPLOY_SSH_KEY` | SSH private key for deployment |
+
+**Manual trigger**: You can also manually trigger deployment from the Actions tab.
+
 ## 📄 License
 
 [Apache 2.0](LICENSE)
