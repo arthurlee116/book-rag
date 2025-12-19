@@ -209,3 +209,24 @@ sudo systemctl restart caddy
 - The `docker-compose.prod.yml` frontend service should NOT have a `command:` override; use Dockerfile.prod's CMD (`serve -s dist -l 3000`).
 - Frontend build requires `VITE_BACKEND_URL=/backend` (handled by Dockerfile.prod ARG creating `.env.production`).
 - Backend `.env` must be copied separately (not in git): `scp backend/.env ubuntu@43.159.200.246:~/book-rag/backend/.env`
+
+### CI/CD Automatic Deployment
+
+GitHub Actions automatically deploys on every push to `main`:
+
+**Workflow**: `.github/workflows/deploy.yml`
+- SSH to server using `DEPLOY_SSH_KEY` secret
+- Pull latest code from GitHub
+- Rebuild and restart Docker containers
+- Health check both frontend and backend endpoints
+
+**GitHub Secrets** (configured via `gh secret set`):
+- `DEPLOY_HOST`: Server IP (43.159.200.246)
+- `DEPLOY_USER`: SSH username (ubuntu)
+- `DEPLOY_SSH_KEY`: Server's `~/.ssh/github_actions_deploy` private key
+
+**Server Setup**:
+- Deployment key: `~/.ssh/github_actions_deploy` (ed25519)
+- Public key added to `~/.ssh/authorized_keys`
+
+Manual deployment is still available via SSH commands above.

@@ -39,6 +39,5 @@ pnpm-debug.log*
 frontend/benchmark/desktop-lighthouse.latest.json
 
 .qoder/
-.github/
 Research Files/
 OpenRouter Files/
