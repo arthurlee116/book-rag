@@ -11,6 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Override at build time with: --build-arg PIP_INDEX_URL=...
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
+ARG PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cpu
 
 WORKDIR /app
 
@@ -20,7 +21,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./requirements.txt
-RUN pip install -i ${PIP_INDEX_URL} --trusted-host ${PIP_TRUSTED_HOST} --retries 5 -r requirements.txt
+
+# Force install CPU-only version of torch to avoid massive CUDA dependencies in Docker.
+# This significantly reduces image size and build time for CPU-only servers.
+RUN pip install --no-cache-dir torch -i ${PIP_INDEX_URL} --trusted-host ${PIP_TRUSTED_HOST} \
+      --extra-index-url ${PIP_EXTRA_INDEX_URL} \
+    && pip install -i ${PIP_INDEX_URL} --trusted-host ${PIP_TRUSTED_HOST} --retries 5 -r requirements.txt
 
 # Copy sources so the image works even without bind mounts.
 COPY . /app
