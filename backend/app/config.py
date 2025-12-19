@@ -24,11 +24,10 @@ class Settings(BaseModel):
     )
 
     # Chunking
-    # Chunking
-    chunk_target_tokens: int = 512
-    chunk_overlap_tokens: int = 50
+    chunk_target_tokens: int = 6144
+    chunk_overlap_tokens: int = 600
     semantic_chunking_enabled: bool = True
-    semantic_chunking_threshold: float = 0.5  # Cosine distance threshold (0.0=identical, 1.0=opposite for raw, but typically 0-2 range if not normalized properly, usually 0.4-0.6 is good for sentence-transformers cosine similarity split)
+    semantic_chunking_threshold: float = 0.5
 
     # Re-packing strategy: "forward" (default order), "reverse" (most relevant at end)
     repack_strategy: str = "reverse"
@@ -176,10 +175,11 @@ def load_settings() -> Settings:
             "ERR_EMBEDDING_QUERY_TASK",
             "Given a question, retrieve relevant passages from the document that explicitly contain the answer.",
         ),
-        chunk_target_tokens=getenv_int("ERR_CHUNK_TARGET_TOKENS", 512),
-        chunk_overlap_tokens=getenv_int("ERR_CHUNK_OVERLAP_TOKENS", 50),
-        semantic_chunking_enabled=getenv_bool("ERR_SEMANTIC_CHUNKING_ENABLED", True),
-        semantic_chunking_threshold=getenv_float("ERR_SEMANTIC_CHUNKING_THRESHOLD", 0.5),
+        # Hardcoded chunking params as per request
+        chunk_target_tokens=6144,
+        chunk_overlap_tokens=600,
+        semantic_chunking_enabled=True,
+        semantic_chunking_threshold=0.5,
         repack_strategy=os.getenv("ERR_REPACK_STRATEGY", "reverse"),
         embedding_aggregation_decay=getenv_float("ERR_EMBEDDING_AGGREGATION_DECAY", 0.7),
         query_fusion_enabled=getenv_bool("ERR_QUERY_FUSION_ENABLED", True),
