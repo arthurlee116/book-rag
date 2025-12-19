@@ -30,7 +30,7 @@ Keep boundaries clear: the frontend talks to the backend over HTTP using `VITE_B
 2. A session is identified via an HTTP header (the backend accepts an `X-Session-Id` style header); if missing, a new session is created server-side.
 3. Upload:
    - The frontend uploads a document to the backend (`POST /upload`).
-   - The backend parses it into text "blocks", then chunks blocks into ~500-token chunks.
+   - The backend parses it into text "blocks", then builds sentence-based chunks (target ~512 tokens with overlap; optional semantic splits via sentence embeddings).
    - The backend calls OpenRouter embeddings in batches and builds in-memory indexes: FAISS for vectors and BM25 for lexical matching.
    - Ingestion logs are streamed over Server-Sent Events (`GET /api/logs/{session_id}`) to show progress in the UI.
 4. Chat (Normal Mode):

@@ -58,7 +58,7 @@ npm run build && npm run start
 - **Session Store**: [`session_store.py`](backend/app/session_store.py) - In-memory sessions, locks, TTL cleanup
 - **Ingestion Pipeline**:
   - [`ingestion/file_parser.py`](backend/app/ingestion/file_parser.py) - Multi-format document parser (epub, mobi, docx, txt, md)
-  - [`ingestion/chunker.py`](backend/app/ingestion/chunker.py) - Paragraph-based chunking with prev/next context
+  - [`ingestion/chunker.py`](backend/app/ingestion/chunker.py) - Sentence-based chunking with token targets, overlap, and optional semantic splits
 - **Retrieval System**: [`retrieval/hybrid_retriever.py`](backend/app/retrieval/hybrid_retriever.py) - FAISS + BM25 hybrid search with fusion
 - **Guardrails**: [`guardrails.py`](backend/app/guardrails.py) - Strict RAG answer enforcement with citations
 
@@ -139,7 +139,7 @@ Toggle fast mode for quicker responses with reduced accuracy:
 ## File Format Support
 - **Documents**: `.epub`, `.mobi`, `.docx`, `.txt`, `.md`
 - **Parsing Strategy**: Extract text content while preserving chapter/heading structure in metadata
-- **Chunking**: Paragraph-based, ~500 tokens per chunk with prev/next context
+- **Chunking**: Sentence-based, target ~512 tokens with overlap and optional semantic splits; prev/next context retained
 
 ## Security & Privacy Considerations
 - All document processing happens in-memory only

@@ -24,4 +24,5 @@ rank-bm25>=0.2.2
 # Vector search
 numpy>=1.26
 faiss-cpu>=1.8
+sentence-transformers>=2.2.2
 

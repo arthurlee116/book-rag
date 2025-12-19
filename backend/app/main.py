@@ -110,9 +110,20 @@ async def _ingest_file(
         return
 
     await session.log(f"[LOG] Extracted {len(blocks)} blocks")
-    await session.log(f"[LOG] Chunking into ~{settings.chunk_target_tokens}-token chunks (overlap={settings.chunk_overlap_tokens})...")
+    await session.log(
+        "[LOG] Chunking into "
+        f"~{settings.chunk_target_tokens}-token chunks "
+        f"(overlap={settings.chunk_overlap_tokens}, "
+        f"semantic={settings.semantic_chunking_enabled}, "
+        f"threshold={settings.semantic_chunking_threshold})..."
+    )
 
-    chunker = Chunker(target_tokens=settings.chunk_target_tokens, overlap_tokens=settings.chunk_overlap_tokens)
+    chunker = Chunker(
+        target_tokens=settings.chunk_target_tokens,
+        overlap_tokens=settings.chunk_overlap_tokens,
+        semantic_enabled=settings.semantic_chunking_enabled,
+        semantic_threshold=settings.semantic_chunking_threshold,
+    )
     chunks = chunker.chunk(blocks=blocks)
     await session.log(f"[LOG] Created {len(chunks)} chunks")
     if not chunks:
