@@ -175,9 +175,9 @@ def load_settings() -> Settings:
             "ERR_EMBEDDING_QUERY_TASK",
             "Given a question, retrieve relevant passages from the document that explicitly contain the answer.",
         ),
-        # Hardcoded chunking params as per request
-        chunk_target_tokens=6144,
-        chunk_overlap_tokens=600,
+        # Chunking params - keep small for low-memory servers (2G)
+        chunk_target_tokens=512,
+        chunk_overlap_tokens=50,
         semantic_chunking_enabled=True,
         semantic_chunking_threshold=0.5,
         repack_strategy=os.getenv("ERR_REPACK_STRATEGY", "reverse"),
