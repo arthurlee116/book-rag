@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Button, Collapse, Table, Tag, Typography } from "antd";
+import { DownOutlined, UpOutlined } from "@ant-design/icons";
 import { useErrStore } from "@/lib/store";
 import type { Evaluation, RetrievalStepData } from "@/lib/types";
 
@@ -133,8 +134,10 @@ export function EvaluationPanel() {
   const sessionId = useErrStore((s) => s.sessionId);
   const evaluation = useErrStore((s) => s.evaluation);
   const fetchEvaluation = useErrStore((s) => s.fetchEvaluation);
+
   const isDesktop = useErrStore((s) => s.isDesktop);
   const [loading, setLoading] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   const panels = useMemo(
     () => (evaluation ? buildPanels(evaluation) : []),
@@ -159,45 +162,56 @@ export function EvaluationPanel() {
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <Text strong style={{ color: "#f5f5f7", fontSize: 13 }}>Retrieval Evaluation</Text>
-        <Button
-          size="small"
-          onClick={onFetch}
-          disabled={!sessionId || loading}
-          style={{ background: "#3a3a3c", borderColor: "transparent", color: "#a1a1a6" }}
-        >
-          {loading ? "Loading..." : "Load Latest"}
-        </Button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button
+            size="small"
+            type="text"
+            icon={collapsed ? <DownOutlined /> : <UpOutlined />}
+            onClick={() => setCollapsed(!collapsed)}
+            style={{ color: "#a1a1a6" }}
+          />
+          <Button
+            size="small"
+            onClick={onFetch}
+            disabled={!sessionId || loading}
+            style={{ background: "#3a3a3c", borderColor: "transparent", color: "#a1a1a6" }}
+          >
+            {loading ? "Loading..." : "Load Latest"}
+          </Button>
+        </div>
       </div>
 
-      {!sessionId ? (
-        <Text style={{ color: "#6e6e73" }}>Upload a document to start a session.</Text>
-      ) : !evaluation ? (
-        <Text style={{ color: "#6e6e73" }}>No evaluation loaded yet.</Text>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <Tag color={evaluation.mode === "fast" ? "gold" : "blue"}>
-              {evaluation.mode === "fast" ? "fast mode" : "normal mode"}
-            </Tag>
-            <Text style={{ color: "#a1a1a6", fontSize: 12 }}>
-              {new Date(evaluation.timestamp).toLocaleString()}
-            </Text>
+      {!collapsed && (
+        !sessionId ? (
+          <Text style={{ color: "#6e6e73" }}>Upload a document to start a session.</Text>
+        ) : !evaluation ? (
+          <Text style={{ color: "#6e6e73" }}>No evaluation loaded yet.</Text>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <Tag color={evaluation.mode === "fast" ? "gold" : "blue"}>
+                {evaluation.mode === "fast" ? "fast mode" : "normal mode"}
+              </Tag>
+              <Text style={{ color: "#a1a1a6", fontSize: 12 }}>
+                {new Date(evaluation.timestamp).toLocaleString()}
+              </Text>
+            </div>
+            <div style={{ background: "#2c2c2e", borderRadius: 8, padding: 12 }}>
+              <Text style={{ color: "#a1a1a6", fontSize: 12 }}>User Query</Text>
+              <div style={{ color: "#f5f5f7", marginTop: 6 }}>{evaluation.user_query}</div>
+            </div>
+            <Collapse
+              size="small"
+              items={panels}
+              style={{ background: "#1c1c1e" }}
+            />
+            {!isDesktop && (
+              <Text style={{ color: "#6e6e73", fontSize: 12 }}>
+                Tip: expand steps for ranking details.
+              </Text>
+            )}
           </div>
-          <div style={{ background: "#2c2c2e", borderRadius: 8, padding: 12 }}>
-            <Text style={{ color: "#a1a1a6", fontSize: 12 }}>User Query</Text>
-            <div style={{ color: "#f5f5f7", marginTop: 6 }}>{evaluation.user_query}</div>
-          </div>
-          <Collapse
-            size="small"
-            items={panels}
-            style={{ background: "#1c1c1e" }}
-          />
-          {!isDesktop && (
-            <Text style={{ color: "#6e6e73", fontSize: 12 }}>
-              Tip: expand steps for ranking details.
-            </Text>
-          )}
-        </div>
+        )
       )}
     </div>
   );
