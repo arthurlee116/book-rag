@@ -282,9 +282,8 @@ async def logs(
     session_id: str,
     settings: Settings = Depends(get_settings),
 ) -> EventSourceResponse:
-    session = get_session(session_id=session_id, ttl_seconds=settings.session_ttl_seconds)
-    if session is None:
-        raise HTTPException(status_code=404, detail="Unknown session")
+    # Use get_or_create to handle race condition where SSE connects before upload completes
+    session = get_or_create_session(session_id=session_id, ttl_seconds=settings.session_ttl_seconds)
 
     async def event_generator():
         # Replay recent history first.
