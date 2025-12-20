@@ -31,12 +31,23 @@ export function UploadPanel() {
     closeRightPanel();
     setUploadStatus("processing");
 
+    const ensureSessionId = () => {
+      if (sessionId) return sessionId;
+      const generated =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      setSessionId(generated);
+      return generated;
+    };
+
+    const activeSessionId = ensureSessionId();
     const fd = new FormData();
     fd.append("file", file);
 
     const resp = await fetch(`${backendUrl}/upload`, {
       method: "POST",
-      headers: sessionId ? { "X-Session-Id": sessionId } : {},
+      headers: activeSessionId ? { "X-Session-Id": activeSessionId } : {},
       body: fd,
     });
 
@@ -48,7 +59,9 @@ export function UploadPanel() {
     }
 
     const data = (await resp.json()) as { session_id: string };
-    setSessionId(data.session_id);
+    if (data.session_id && data.session_id !== activeSessionId) {
+      setSessionId(data.session_id);
+    }
   };
 
   const onClear = () => {

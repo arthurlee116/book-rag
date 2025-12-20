@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from typing import cast
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
@@ -15,6 +16,7 @@ from .guardrails import STRICT_NO_MENTION, enforce_strict_rag_answer
 from .ingestion.chunker import Chunker
 from .ingestion.chunker import estimate_tokens
 from .ingestion.file_parser import FileParser
+from .models.chunk import ChunkModel
 from .openrouter_client import OpenRouterClient, OpenRouterError
 from .openrouter_client import ChatMessage
 from .retrieval.fusion import dedupe_keep_order, rrf_fuse
@@ -100,8 +102,11 @@ async def _ingest_file(
     await session.log("[LOG] Parsing document...")
 
     parser = FileParser()
+    loop = asyncio.get_running_loop()
     try:
-        blocks = parser.parse(filename=filename, content=content)
+        blocks = await loop.run_in_executor(
+            None, lambda: parser.parse(filename=filename, content=content)
+        )
     except Exception as e:  # noqa: BLE001
         async with session.lock:
             session.ingest_status = "error"
@@ -124,7 +129,7 @@ async def _ingest_file(
         semantic_enabled=settings.semantic_chunking_enabled,
         semantic_threshold=settings.semantic_chunking_threshold,
     )
-    chunks = chunker.chunk(blocks=blocks)
+    chunks = await loop.run_in_executor(None, lambda: chunker.chunk(blocks=blocks))
     await session.log(f"[LOG] Created {len(chunks)} chunks")
     if not chunks:
         async with session.lock:
@@ -140,25 +145,41 @@ async def _ingest_file(
     detected_embedding_dim: int | None = None
     total_batches = (len(chunks) + batch_size - 1) // batch_size
 
-    for b in range(total_batches):
-        start = b * batch_size
-        end = min(len(chunks), (b + 1) * batch_size)
-        await session.log(f"[LOG] Embedding batch {b+1}/{total_batches} ({start}-{end})...")
-        texts = [c.content for c in chunks[start:end]]
-        try:
-            embs = await openrouter.embeddings(model=settings.embedding_model, inputs=texts)
-        except OpenRouterError as e:
-            async with session.lock:
-                session.ingest_status = "error"
-                session.ingest_error = str(e)
-            await session.log(f"[LOG] ERROR embedding: {e}")
-            return
+    # Concurrent embedding with semaphore
+    semaphore = asyncio.Semaphore(20)
+    tasks = []
 
-        if embs.ndim != 2 or embs.shape[0] != len(texts):
+    async def _process_batch(b_idx: int):
+        async with semaphore:
+            start = b_idx * batch_size
+            end = min(len(chunks), (b_idx + 1) * batch_size)
+            await session.log(f"[LOG] Embedding batch {b_idx+1}/{total_batches} ({start}-{end})...")
+            texts = [c.content for c in chunks[start:end]]
+            try:
+                embs = await openrouter.embeddings(model=settings.embedding_model, inputs=texts)
+            except Exception as e:
+                return b_idx, None, str(e)
+            
+            if embs.ndim != 2 or embs.shape[0] != len(texts):
+                return b_idx, None, f"Unexpected embeddings shape: {tuple(embs.shape)}"
+            
+            return b_idx, embs, None
+
+    for b in range(total_batches):
+        tasks.append(_process_batch(b))
+    
+    # Run all tasks
+    results = await asyncio.gather(*tasks)
+    
+    # Sort results by batch index to ensure order
+    results.sort(key=lambda x: x[0])
+
+    for b_idx, embs, err in results:
+        if err:
             async with session.lock:
                 session.ingest_status = "error"
-                session.ingest_error = f"Unexpected embeddings shape: {tuple(embs.shape)}"
-            await session.log(f"[LOG] ERROR embedding: Unexpected embeddings shape {tuple(embs.shape)}")
+                session.ingest_error = err
+            await session.log(f"[LOG] ERROR embedding batch {b_idx+1}: {err}")
             return
 
         batch_dim = int(embs.shape[1])
@@ -177,6 +198,7 @@ async def _ingest_file(
                 f"(expected {detected_embedding_dim}, got {batch_dim})"
             )
             return
+        
         embeddings_list.extend(embs.tolist())
 
     embeddings = embeddings_list
@@ -205,7 +227,12 @@ async def _ingest_file(
     try:
         import numpy as np
 
-        retriever.build(chunks=chunks, embeddings=np.asarray(embeddings, dtype=np.float32))
+        await loop.run_in_executor(
+            None,
+            lambda: retriever.build(
+                chunks=chunks, embeddings=np.asarray(embeddings, dtype=np.float32)
+            ),
+        )
     except Exception as e:  # noqa: BLE001
         async with session.lock:
             session.ingest_status = "error"
@@ -458,7 +485,7 @@ async def chat(
 
         import numpy as np
         # Fast mode: simple mean (no weighted aggregation)
-        query_embedding = np.mean(q_embs, axis=0, dtype=np.float32)
+        query_embedding = cast(np.ndarray, np.mean(q_embs, axis=0, dtype=np.float32))
 
         # Fast mode: use MRL (Matryoshka) lower dimension for faster search
         search_dim = settings.embedding_dim_fast_mode
@@ -588,7 +615,7 @@ async def chat(
             if base_vec is None:
                 use_hyde = True
             else:
-                sim_hyde = cosine(base_vec, hyde_vec)
+                sim_hyde = cosine(base_vec, cast(np.ndarray, hyde_vec))
                 use_hyde = (not settings.drift_filter_enabled) or (
                     sim_hyde >= settings.hyde_drift_sim_threshold
                 )
@@ -600,7 +627,7 @@ async def chat(
         # Retrieve per query, then fuse with RRF (robust to score calibration).
         await session.log("[LOG] Chat: retrieval (multi-query + RRF fusion)...")
         rankings: list[list[str]] = []
-        id_to_chunk: dict[str, object] = {}
+        id_to_chunk: dict[str, ChunkModel] = {}
 
         for q in query_texts:
             v = query_vecs.get(q)

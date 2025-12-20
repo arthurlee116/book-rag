@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 from typing import Any
 from uuid import uuid4
@@ -52,6 +53,31 @@ class Chunker:
         
         self._spacy_nlp = None
         self._embed_model = None
+        self._embed_model_failed = False
+
+    def _apply_hf_env(self) -> None:
+        proxy = (
+            os.getenv("ERR_HF_PROXY")
+            or os.getenv("ERR_PROXY")
+            or os.getenv("HTTPS_PROXY")
+            or os.getenv("HTTP_PROXY")
+        )
+        if proxy:
+            os.environ.setdefault("HTTPS_PROXY", proxy)
+            os.environ.setdefault("HTTP_PROXY", proxy)
+
+        hf_home = os.getenv("ERR_HF_HOME")
+        if hf_home:
+            os.environ.setdefault("HF_HOME", hf_home)
+
+        ca_bundle = os.getenv("ERR_HF_CA_BUNDLE")
+        if ca_bundle:
+            os.environ.setdefault("REQUESTS_CA_BUNDLE", ca_bundle)
+            os.environ.setdefault("SSL_CERT_FILE", ca_bundle)
+
+        raw_disable_ssl = os.getenv("ERR_HF_DISABLE_SSL_VERIFY")
+        if raw_disable_ssl and raw_disable_ssl.strip().lower() in {"1", "true", "yes", "y", "on"}:
+            os.environ.setdefault("HF_HUB_DISABLE_SSL_VERIFY", "1")
 
     def _ensure_spacy(self) -> None:
         if self._spacy_nlp is not None:
@@ -67,16 +93,19 @@ class Chunker:
             print(f"Error loading spacy: {e}")
 
     def _ensure_embed_model(self) -> None:
-        if self._embed_model is not None:
+        if self._embed_model is not None or self._embed_model_failed:
             return
         if SentenceTransformer is None:
              print("Warning: sentence-transformers not installed")
+             self._embed_model_failed = True
              return
         # lightweight model
         try:
+            self._apply_hf_env()
             self._embed_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
         except Exception as e:
              print(f"Error loading embedding model: {e}")
+             self._embed_model_failed = True
 
     def _split_sentences(self, text: str) -> list[str]:
         text = text.strip()
