@@ -2,7 +2,7 @@ ARG NODE_BASE_IMAGE=docker.m.daocloud.io/library/node:22-alpine
 FROM ${NODE_BASE_IMAGE} AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 FROM ${NODE_BASE_IMAGE} AS builder
 WORKDIR /app

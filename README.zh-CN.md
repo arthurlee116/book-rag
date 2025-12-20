@@ -164,7 +164,7 @@ uvicorn backend.app.main:app --reload --port 8000
 **前端：**
 ```bash
 cd frontend
-npm install
+npm install --legacy-peer-deps
 cp .env.example .env.local
 npm run dev
 ```

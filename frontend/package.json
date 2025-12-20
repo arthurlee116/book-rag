@@ -24,7 +24,7 @@
     "@typescript-eslint/eslint-plugin": "^8.49.0",
     "@typescript-eslint/parser": "^8.49.0",
     "typescript-eslint": "^8.49.0",
-    "@vitejs/plugin-react": "^4.4.1",
+    "@vitejs/plugin-react": "^5.0.0",
     "eslint": "^9.39.2",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
@@ -33,6 +33,6 @@
     "chrome-launcher": "^1.1.2",
     "puppeteer": "^23.11.1",
     "typescript": "^5.9.3",
-    "vite": "^6.3.5"
+    "vite": "^8.0.0-beta.3"
   }
 }

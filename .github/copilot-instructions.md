@@ -69,7 +69,7 @@ Language detection is a small heuristic in `detect_dominant_language()` (same fi
 
 ## Developer workflows (repo defaults)
 - Backend: install `backend/requirements.txt`, run `uvicorn backend.app.main:app --reload --port 8000`, tests via `python -m unittest discover -s backend/tests -p "test_*.py"`.
-- Frontend: `npm install`, `npm run dev`, lint via `npm run lint`.
+- Frontend: `npm install --legacy-peer-deps`, `npm run dev`, lint via `npm run lint`.
 
 ### Docker workflow (also supported)
 - `docker compose up --build` runs frontend+backend together (see repo `README.md` and `docker-compose.yml`).

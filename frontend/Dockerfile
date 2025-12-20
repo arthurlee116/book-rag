@@ -4,7 +4,7 @@ FROM ${NODE_BASE_IMAGE}
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 COPY . /app
 

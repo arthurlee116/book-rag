@@ -33,7 +33,7 @@ python -m unittest discover -s backend/tests -p "test_*.py"
 ```bash
 # Setup (from frontend/ directory)
 cd frontend
-npm install
+npm install --legacy-peer-deps
 
 # Configure environment
 cp .env.example .env.local

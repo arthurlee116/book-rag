@@ -61,7 +61,7 @@ From repo root:
 
 From `frontend/`:
 
-- Install deps: `npm install`
+- Install deps: `npm install --legacy-peer-deps`
 - Dev server: `npm run dev` (serves on http://localhost:3000)
 - Lint: `npm run lint`
 - Production build: `npm run build`
