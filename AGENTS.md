@@ -12,13 +12,13 @@ ERR (Ephemeral RAG Reader) is a privacy-first document Q&A web app. Users upload
   - `backend/app/openrouter_client.py`: OpenRouter HTTP wrapper for chat + embeddings.
   - `backend/app/session_store.py`: in-memory sessions, locks, TTL cleanup.
   - `backend/app/ingestion/`: file parsing and chunking (`file_parser.py`, `chunker.py`).
-  - `backend/app/retrieval/`: hybrid retriever and indexing (`hybrid_retriever.py`).
+  - `backend/app/retrieval/`: hybrid retriever, indexing, and evaluation metrics (`hybrid_retriever.py`, `evaluation.py`).
   - `backend/app/guardrails.py`: strict answer enforcement (citations / fallback behavior).
 - `frontend/`: Vite + React + Ant Design + TypeScript UI:
   - `frontend/src/main.tsx`: React entry point with Ant Design ConfigProvider.
   - `frontend/src/App.tsx`: main application component.
   - `frontend/src/theme.ts`: Ant Design dark theme token configuration.
-  - `frontend/src/components/`: UI components (UploadPanel, ChatPanel, TerminalWindow, DocumentPanel).
+  - `frontend/src/components/`: UI components (UploadPanel, ChatPanel, TerminalWindow, DocumentPanel, EvaluationPanel).
   - `frontend/src/lib/`: Zustand state (`store.ts`) and TypeScript types (`types.ts`).
   - `frontend/vite.config.ts`: Vite configuration with API proxy.
 

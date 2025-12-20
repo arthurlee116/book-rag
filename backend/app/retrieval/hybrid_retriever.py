@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Optional
+from .evaluation import RetrievalMetrics
 
 import numpy as np
 
@@ -193,6 +194,7 @@ class HybridRetriever:
         expanded_query: str | None = None,
         top_k: int = 5,
         search_dim: int | None = None,
+        metrics: Optional["RetrievalMetrics"] = None,
     ) -> list[ScoredChunk]:
         """
         Search for relevant chunks.
@@ -275,6 +277,13 @@ class HybridRetriever:
             for i, s in zip(bm25_top_idx, bm25_top_scores)
         }
 
+        if metrics:
+            metrics.add_step("bm25_search", data={
+                "topk_indices": bm25_top_idx.tolist()[:10],
+                "raw_scores": bm25_top_scores.tolist()[:10],
+                "norm_range": (bm25_min, bm25_max)
+            })
+
         # Phase C: Candidate union and fusion.
         candidate_ids = set(vec_ids_list) | set(int(i) for i in bm25_top_idx.tolist())
 
@@ -314,4 +323,16 @@ class HybridRetriever:
             )
 
         scored.sort(key=lambda x: x.final_score, reverse=True)
+        if metrics:
+            metrics.add_step("hybrid_fusion", data={
+                "topk_chunks": [
+                    {
+                        "chunk_id": s.chunk.id,
+                        "chunk_idx": self._chunks.index(s.chunk),
+                        "final_score": s.final_score,
+                        "vector_score": s.vector_score,
+                        "bm25_norm": s.bm25_score_norm
+                    } for s in scored[:top_k]
+                ]
+            })
         return scored[: min(top_k, len(scored))]

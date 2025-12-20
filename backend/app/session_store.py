@@ -4,7 +4,8 @@ import asyncio
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
+from .retrieval.evaluation import EvaluationRecord
 
 from .models.chunk import ChunkModel
 from .retrieval.hybrid_retriever import HybridRetriever, ScoredChunk
@@ -48,6 +49,7 @@ class SessionState:
 
     # concurrency
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    latest_evaluation: Optional[EvaluationRecord] = None
 
     def touch(self, *, ttl_seconds: int) -> None:
         now = time.time()

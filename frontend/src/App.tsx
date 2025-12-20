@@ -18,6 +18,9 @@ const TerminalWindow = lazy(() =>
 const DocumentPanel = lazy(() =>
   import("@/components/DocumentPanel").then((module) => ({ default: module.DocumentPanel })),
 );
+const EvaluationPanel = lazy(() =>
+  import("@/components/EvaluationPanel").then((module) => ({ default: module.EvaluationPanel })),
+);
 
 function PanelSkeleton({ isDesktop }: { isDesktop: boolean }) {
   return (
@@ -79,6 +82,7 @@ export default function App() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <UploadPanel />
                     <TerminalWindow />
+                    <EvaluationPanel />
                   </div>
                 </Col>
                 <Col span={rightPanelOpen ? 10 : 16}>
@@ -114,6 +118,7 @@ export default function App() {
                 <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
                   <UploadPanel />
                   <TerminalWindow />
+                  <EvaluationPanel />
                   <ChatPanel />
                 </div>
               </div>

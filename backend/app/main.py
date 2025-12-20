@@ -23,6 +23,9 @@ from .retrieval.fusion import dedupe_keep_order, rrf_fuse
 from .retrieval.hybrid_retriever import HybridRetriever
 from .repacking import apply_repack_strategy
 from .session_store import ChatTurn, cleanup_expired_sessions, get_or_create_session, get_session
+from datetime import datetime
+
+from .retrieval.evaluation import EvaluationRecord, RetrievalMetrics
 
 
 async def _cleanup_loop(settings: Settings, shutdown_event: asyncio.Event) -> None:
@@ -466,6 +469,20 @@ async def chat(
     except OpenRouterError as e:
         raise HTTPException(status_code=502, detail=f"OpenRouter translate error: {e}") from e
 
+    metrics = RetrievalMetrics(
+        session_id=req.session_id,
+        user_query=user_query,
+        mode="fast" if req.fast_mode else "normal",
+        start_time=datetime.now(),
+    )
+    metrics.add_step(
+        "language_alignment",
+        data={
+            "original": user_query,
+            "translated": expanded_query,
+        },
+    )
+
     if req.fast_mode:
         await session.log("[LOG] Chat: fast mode enabled -> baseline retrieval.")
 
@@ -495,9 +512,14 @@ async def chat(
             expanded_query=expanded_query,
             top_k=req.top_k,
             search_dim=search_dim,
+            metrics=metrics
         )
         # Fast mode: no re-packing, keep original order
         retrieved_chunks = [s.chunk for s in scored]
+
+        metrics.add_step("drift_filter", skipped=True, reason="fast_mode")
+        metrics.add_step("llm_rerank", skipped=True, reason="fast_mode")
+        metrics.add_step("repack", skipped=True, reason="fast_mode")
     else:
         base_query = (expanded_query or "").strip() or user_query
 
@@ -637,6 +659,7 @@ async def chat(
                 query_embedding=v,
                 expanded_query=q,
                 top_k=settings.fusion_per_query_top_k,
+                metrics=metrics
             )
             ranking_ids: list[str] = []
             for s in scored:
@@ -652,6 +675,7 @@ async def chat(
                 query_embedding=hyde_vec,
                 expanded_query=base_query,
                 top_k=settings.fusion_per_query_top_k,
+                metrics=metrics
             )
             ranking_ids = []
             for s in scored:
@@ -664,6 +688,15 @@ async def chat(
         fused_ids = rrf_fuse(
             rankings, k=settings.rrf_k, max_results=settings.fusion_max_candidates
         )
+        metrics.add_step(
+            "rrf_fusion",
+            data={
+                "input_rankings_count": len(rankings),
+                "fused_top20": fused_ids[:20],
+                "k": settings.rrf_k,
+                "max_candidates": settings.fusion_max_candidates,
+            },
+        )
         candidate_chunks = [id_to_chunk[cid] for cid in fused_ids if cid in id_to_chunk]
 
         # Fall back to a single retrieval if fusion failed unexpectedly.
@@ -673,10 +706,13 @@ async def chat(
                 query_embedding=base_vec if base_vec is not None else q_embs[0],
                 expanded_query=base_query,
                 top_k=max(req.top_k, 1),
+                metrics=metrics
             )
             candidate_chunks = [s.chunk for s in scored]
 
-        if settings.llm_rerank_enabled and candidate_chunks:
+        if not settings.llm_rerank_enabled:
+            metrics.add_step("llm_rerank", skipped=True, reason="disabled")
+        elif candidate_chunks:
             pool_n = max(1, min(settings.llm_rerank_candidate_pool, len(candidate_chunks)))
             pool = candidate_chunks[:pool_n]
             passages = [(c.id, c.content) for c in pool]
@@ -690,8 +726,18 @@ async def chat(
                     model=settings.llm_rerank_model or None,
                     max_chars=settings.llm_rerank_max_chars,
                 )
+                candidate_ids = {c.id for c in candidate_chunks}
+                metrics.add_step(
+                    "llm_rerank",
+                    data={
+                        "pool_size": pool_n,
+                        "ranked_ids": ranked_ids[:10],
+                        "filtered": [cid for cid in ranked_ids if cid not in candidate_ids],
+                    },
+                )
             except OpenRouterError as e:
                 await session.log(f"[LOG] WARNING: rerank failed: {e}")
+                metrics.add_step("llm_rerank", skipped=True, reason="api_error")
             else:
                 id_to_chunk_all = {c.id: c for c in candidate_chunks}
                 ordered: list = []
@@ -707,6 +753,8 @@ async def chat(
                         continue
                     ordered.append(ch)
                 candidate_chunks = ordered
+        elif not candidate_chunks:
+            metrics.add_step("llm_rerank", skipped=True, reason="no_candidates")
 
         # Final selection for answer context.
         retrieved_chunks = candidate_chunks[: req.top_k]
@@ -731,6 +779,20 @@ async def chat(
         fast_mode=req.fast_mode,
         repack_strategy=repack_strategy,
     )
+    # Add final context with previews (no scores for repacked, use 0 or previous)
+    final_chunks_data = []
+    for i, chunk in enumerate(retrieved_chunks):
+        if len(chunk.content) > 200:
+            preview = f"{chunk.content[:197]}..."
+        else:
+            preview = chunk.content
+        final_chunks_data.append({
+            "chunk_id": chunk.id,
+            "rank": i+1,
+            "score": 0.0,  # No score post-repack
+            "preview": preview
+        })
+    metrics.add_step("final_context", data={"chunks": final_chunks_data})
 
     context_blocks = _build_context_blocks(chunks=retrieved_chunks, include_neighbors=True)
     context_text = "\n\n".join(context_blocks)
@@ -842,9 +904,23 @@ async def chat(
             ChatTurn(role="assistant", content=answer, citations=retrieved_chunks)
         )
         session.register_references(cited_models)
+        session.latest_evaluation = metrics.to_record()
 
     await session.log("[LOG] Chat: done.")
     return ChatResponse(answer=answer, citations=citations_payload)
+
+@app.get("/evaluation", response_model=EvaluationRecord)
+async def get_evaluation(
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    settings: Settings = Depends(get_settings),
+):
+    session_id = (x_session_id or "").strip()
+    if not session_id:
+        raise HTTPException(status_code=400, detail="Missing X-Session-Id header.")
+    session = get_session(session_id=session_id, ttl_seconds=settings.session_ttl_seconds)
+    if session is None or session.latest_evaluation is None:
+        raise HTTPException(status_code=404, detail="No evaluation record found for this session.")
+    return session.latest_evaluation
 
 
 def _rewrite_local_citations_to_global(

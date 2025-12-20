@@ -59,13 +59,15 @@ npm run build && npm run start
 - **Ingestion Pipeline**:
   - [`ingestion/file_parser.py`](backend/app/ingestion/file_parser.py) - Multi-format document parser (epub, mobi, docx, txt, md)
   - [`ingestion/chunker.py`](backend/app/ingestion/chunker.py) - Sentence-based chunking with token targets, overlap, and optional semantic splits
-- **Retrieval System**: [`retrieval/hybrid_retriever.py`](backend/app/retrieval/hybrid_retriever.py) - FAISS + BM25 hybrid search with fusion
+- **Retrieval System**: 
+  - [`retrieval/hybrid_retriever.py`](backend/app/retrieval/hybrid_retriever.py) - FAISS + BM25 hybrid search with fusion
+  - [`retrieval/evaluation.py`](backend/app/retrieval/evaluation.py) - Retrieval pipeline metrics and evaluation records
 - **Guardrails**: [`guardrails.py`](backend/app/guardrails.py) - Strict RAG answer enforcement with citations
 
 ### Frontend Architecture (`frontend/`)
 - **App Router**: [`app/`](frontend/app/) - Next.js 16 App Router pages and layouts
-- **Components**: [`components/`](frontend/components/) - React UI components (upload, chat, terminal, etc.)
-- **State Management**: [`lib/store.ts`](frontend/lib/store.ts) - Zustand store for session, upload status, chat history
+- **Components**: [`components/`](frontend/components/) - React UI components (upload, chat, terminal, evaluation, etc.)
+- **State Management**: [`lib/store.ts`](frontend/lib/store.ts) - Zustand store for session, upload status, chat history, evaluation
 - **API Layer**: HTTP client backend communication using `NEXT_PUBLIC_BACKEND_URL`
 
 ### Request Flow
@@ -73,6 +75,7 @@ npm run build && npm run start
 2. **Document Upload**: `POST /upload` → parse → chunk → embed → build indexes → stream logs via SSE
 3. **Chat**: `POST /chat` → query expansion (optional) → hybrid retrieval → strict RAG generation → guardrails enforcement
 4. **Real-time Logs**: `GET /api/logs/{session_id}` - Server-Sent Events for ingestion progress
+5. **Retrieval Evaluation**: `GET /evaluation` - Returns detailed metrics for the latest chat query's retrieval pipeline
 
 ## Key Technical Details
 

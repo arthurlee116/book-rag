@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage, ChunkModel } from "@/lib/types";
+import type { ChatMessage, ChunkModel, Evaluation } from "@/lib/types";
 
 type UploadStatus = "idle" | "processing" | "ready" | "error";
 
@@ -34,6 +34,9 @@ type ErrState = {
 
   activeChunk: ChunkModel | null;
   setActiveChunk: (c: ChunkModel | null) => void;
+
+  evaluation: Evaluation | null;
+  fetchEvaluation: () => Promise<void>;
 };
 
 // Use /backend proxy path in Docker, or direct URL for local dev
@@ -82,4 +85,21 @@ export const useErrStore = create<ErrState>((set, get) => ({
 
   activeChunk: null,
   setActiveChunk: (c) => set({ activeChunk: c }),
+
+  evaluation: null,
+  fetchEvaluation: async () => {
+    const state = get();
+    if (!state.sessionId) return;
+    try {
+      const resp = await fetch(`${state.backendUrl}/evaluation`, {
+        headers: { "X-Session-Id": state.sessionId },
+      });
+      if (resp.ok) {
+        const data = await resp.json() as Evaluation;
+        set({ evaluation: data });
+      }
+    } catch (e) {
+      console.error("Failed to fetch evaluation", e);
+    }
+  },
 }));
