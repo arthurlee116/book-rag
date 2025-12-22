@@ -125,6 +125,7 @@ class HybridRetriever:
             return tokens
 
         self._ensure_spacy()
+        assert self._spacy_nlp is not None
         doc = self._spacy_nlp(text)
         tokens: list[str] = []
         for t in doc:
@@ -174,7 +175,7 @@ class HybridRetriever:
         # Vector index (cosine via normalized inner product).
         doc_embeddings = _l2_normalize(embeddings)
         index = faiss.IndexFlatIP(self.embedding_dim)
-        index.add(doc_embeddings)
+        index.add(doc_embeddings)  # type: ignore
 
         # BM25 index.
         tokenized_corpus = [

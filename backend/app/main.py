@@ -156,6 +156,7 @@ async def _ingest_file(
         async with semaphore:
             start = b_idx * batch_size
             end = min(len(chunks), (b_idx + 1) * batch_size)
+            assert session is not None
             await session.log(f"[LOG] Embedding batch {b_idx+1}/{total_batches} ({start}-{end})...")
             texts = [c.content for c in chunks[start:end]]
             try:

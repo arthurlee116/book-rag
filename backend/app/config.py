@@ -44,8 +44,8 @@ class Settings(BaseModel):
 
     # Query drift filtering
     drift_filter_enabled: bool = True
-    drift_sim_threshold: float = 0.25
-    hyde_drift_sim_threshold: float = 0.15
+    drift_sim_threshold: float = 0.8
+    hyde_drift_sim_threshold: float = 0.6
 
     # Fusion parameters
     rrf_k: int = 60

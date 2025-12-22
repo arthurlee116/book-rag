@@ -3,8 +3,8 @@ import requests
 from sentence_transformers import SentenceTransformer
 
 # Explicitly set proxy to what user provided
-# os.environ["https_proxy"] = "http://127.0.0.1:7890"
-# os.environ["http_proxy"] = "http://127.0.0.1:7890"
+# os.environ["https_proxy"] = "http://127.0.0.1:10808"
+# os.environ["http_proxy"] = "http://127.0.0.1:10808"
 
 print("Testing connection to huggingface.co...")
 try:

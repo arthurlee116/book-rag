@@ -1,7 +1,7 @@
 import unittest
-from app.ingestion.chunker import Chunker, estimate_tokens
-from app.models.chunk import ChunkModel
-from app.ingestion.file_parser import ParsedBlock
+from backend.app.ingestion.chunker import Chunker, estimate_tokens
+from backend.app.models.chunk import ChunkModel
+from backend.app.ingestion.file_parser import ParsedBlock
 import os
 
 class TestChunker(unittest.TestCase):

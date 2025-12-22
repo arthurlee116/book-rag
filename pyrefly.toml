@@ -1,0 +1,9 @@
+project-includes = [
+    "**/*.py*",
+    "**/*.ipynb",
+]
+
+search_path = [
+    "Research Files/rag_eval/scripts",
+]
+
