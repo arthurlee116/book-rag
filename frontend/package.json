@@ -33,6 +33,6 @@
     "chrome-launcher": "^1.1.2",
     "puppeteer": "^23.11.1",
     "typescript": "^5.9.3",
-    "vite": "^8.0.0-beta.3"
+    "vite": "^8.0.0-beta.4"
   }
 }

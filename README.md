@@ -237,11 +237,23 @@ sudo apt update && sudo apt install caddy
 **Caddyfile** (`/etc/caddy/Caddyfile`):
 ```
 bookembed.net {
-    reverse_proxy localhost:3000
-
     handle /backend/* {
         uri strip_prefix /backend
         reverse_proxy localhost:8000
+    }
+
+    # PERF: cache fingerprinted static assets aggressively (repeat-visit speed).
+    # Without this, Lighthouse/PageSpeed reports "Use efficient cache lifetimes"
+    # with TTL=0 for `/assets/*`.
+    handle /assets/* {
+        header Cache-Control "public, max-age=31536000, immutable"
+        reverse_proxy localhost:3000
+    }
+
+    # SPA entry (and any non-asset route): avoid caching HTML so deployments take effect quickly.
+    handle {
+        header Cache-Control "no-cache"
+        reverse_proxy localhost:3000
     }
 }
 ```

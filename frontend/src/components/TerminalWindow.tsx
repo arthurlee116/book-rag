@@ -5,7 +5,7 @@ import { useErrStore } from "@/lib/store";
 const { Text } = Typography;
 
 const statusConfig: Record<string, { color: string; bg: string }> = {
-  idle: { color: "#6e6e73", bg: "#3a3a3c" },
+  idle: { color: "#8e8e93", bg: "#3a3a3c" },
   processing: { color: "#f59e0b", bg: "rgba(245, 158, 11, 0.15)" },
   ready: { color: "#22c55e", bg: "rgba(34, 197, 94, 0.15)" },
   error: { color: "#ef4444", bg: "rgba(239, 68, 68, 0.15)" },
@@ -101,13 +101,13 @@ export function TerminalWindow() {
         }}
       >
         {!sessionId ? (
-          <Text style={{ color: "#6e6e73" }}>Upload a document to start...</Text>
+          <Text style={{ color: "#8e8e93" }}>Upload a document to start...</Text>
         ) : logs.length === 0 ? (
-          <Text style={{ color: "#6e6e73" }}>Waiting for logs...</Text>
+          <Text style={{ color: "#8e8e93" }}>Waiting for logs...</Text>
         ) : (
           logs.map((l, idx) => (
             <div key={idx} style={{ color: l.includes("ERROR") ? "#ef4444" : "#a1a1a6" }}>
-              <span style={{ color: "#6e6e73" }}>$</span> {l}
+              <span style={{ color: "#8e8e93" }}>$</span> {l}
             </div>
           ))
         )}

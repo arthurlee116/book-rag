@@ -183,9 +183,9 @@ export function EvaluationPanel() {
 
       {!collapsed && (
         !sessionId ? (
-          <Text style={{ color: "#6e6e73" }}>Upload a document to start a session.</Text>
+          <Text style={{ color: "#8e8e93" }}>Upload a document to start a session.</Text>
         ) : !evaluation ? (
-          <Text style={{ color: "#6e6e73" }}>No evaluation loaded yet.</Text>
+          <Text style={{ color: "#8e8e93" }}>No evaluation loaded yet.</Text>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -206,7 +206,7 @@ export function EvaluationPanel() {
               style={{ background: "#1c1c1e" }}
             />
             {!isDesktop && (
-              <Text style={{ color: "#6e6e73", fontSize: 12 }}>
+              <Text style={{ color: "#8e8e93", fontSize: 12 }}>
                 Tip: expand steps for ranking details.
               </Text>
             )}

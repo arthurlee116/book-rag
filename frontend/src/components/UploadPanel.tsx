@@ -82,7 +82,7 @@ export function UploadPanel() {
         <div>
           <Text strong style={{ color: "#f5f5f7", fontSize: 13 }}>Upload Document</Text>
           <br />
-          <Text style={{ color: "#6e6e73", fontSize: 12 }}>
+          <Text style={{ color: "#8e8e93", fontSize: 12 }}>
             .txt, .md, .docx, .epub, .mobi
           </Text>
         </div>

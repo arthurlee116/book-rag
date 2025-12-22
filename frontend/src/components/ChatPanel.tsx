@@ -29,7 +29,7 @@ function renderWithCitationButtons(
             fontWeight: 500,
             borderRadius: 4,
             background: disabled ? "#3a3a3c" : "rgba(99, 102, 241, 0.2)",
-            color: disabled ? "#6e6e73" : "#818cf8",
+            color: disabled ? "#8e8e93" : "#818cf8",
             cursor: disabled ? "not-allowed" : "pointer",
             transition: "all 0.15s",
           }}
@@ -169,6 +169,7 @@ export function ChatPanel() {
             value={topK}
             onChange={setTopK}
             disabled={busy}
+            aria-label="Top K"
             style={{ width: 75 }}
             options={[
               { value: 5, label: "Top 5" },
@@ -202,7 +203,7 @@ export function ChatPanel() {
         }}
       >
         {messages.length === 0 ? (
-          <Text style={{ color: "#6e6e73" }}>
+          <Text style={{ color: "#8e8e93" }}>
             Upload a document, wait for "ready", then ask a question.
           </Text>
         ) : (

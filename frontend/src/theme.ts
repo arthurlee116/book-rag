@@ -19,7 +19,9 @@ export const darkTheme: ThemeConfig = {
     // 文字色
     colorText: "#f5f5f7",
     colorTextSecondary: "#a1a1a6",
-    colorTextTertiary: "#6e6e73",
+    // A11Y: bump tertiary text color to meet WCAG AA contrast on dark surfaces.
+    // Verify: run Lighthouse Accessibility and check "Contrast" audit.
+    colorTextTertiary: "#8e8e93",
     colorTextQuaternary: "#48484a",
 
     // 边框

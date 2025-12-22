@@ -36,14 +36,14 @@ export function DocumentPanel() {
           icon={<CloseOutlined />}
           onClick={closeRightPanel}
           size="small"
-          style={{ color: "#6e6e73" }}
+          style={{ color: "#8e8e93" }}
         />
       </div>
 
       {/* Content */}
       <div style={{ padding: 20, flex: 1, overflow: "auto" }}>
         {!activeChunk ? (
-          <Text style={{ color: "#6e6e73" }}>
+          <Text style={{ color: "#8e8e93" }}>
             Click a citation to view context.
           </Text>
         ) : (
@@ -55,7 +55,7 @@ export function DocumentPanel() {
                   padding: 14,
                   background: "#2c2c2e",
                   borderRadius: 10,
-                  color: "#6e6e73",
+                  color: "#8e8e93",
                   fontSize: 13,
                   lineHeight: 1.7,
                 }}
@@ -98,7 +98,7 @@ export function DocumentPanel() {
                   padding: 14,
                   background: "#2c2c2e",
                   borderRadius: 10,
-                  color: "#6e6e73",
+                  color: "#8e8e93",
                   fontSize: 13,
                   lineHeight: 1.7,
                 }}
