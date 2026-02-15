@@ -25,7 +25,8 @@ class TestHybridRetriever(unittest.TestCase):
         self.retriever.build(chunks=self.chunks, embeddings=self.embeddings, doc_language="en")
 
     def test_search_correctness(self):
-        query_emb = np.random.random((1, self.dim)).astype(np.float32)
+        rng = np.random.default_rng(101)
+        query_emb = rng.random((1, self.dim)).astype(np.float32)
 
         # Run search
         results = self.retriever.search(
@@ -54,7 +55,8 @@ class TestHybridRetriever(unittest.TestCase):
 
         # Embedding that is far from the target chunk's embedding
         # Just use a random one, unlikely to be close.
-        query_emb = np.random.random((1, self.dim)).astype(np.float32)
+        rng = np.random.default_rng(202)
+        query_emb = rng.random((1, self.dim)).astype(np.float32)
 
         # We want target_idx to NOT be in the top 10 (candidate_k) of vector search
         # but BE in the top of BM25.
@@ -79,7 +81,8 @@ class TestHybridRetriever(unittest.TestCase):
             self.assertTrue(0.0 <= r.bm25_score_norm <= 1.0)
 
     def test_search_mrl(self):
-        query_emb = np.random.random((1, self.dim)).astype(np.float32)
+        rng = np.random.default_rng(303)
+        query_emb = rng.random((1, self.dim)).astype(np.float32)
         results = self.retriever.search(
             query="chunk",
             query_embedding=query_emb,

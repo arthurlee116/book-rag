@@ -39,6 +39,11 @@ pnpm-debug.log*
 frontend/benchmark/desktop-lighthouse.latest.json
 
 .qoder/
+.serena/
+openspec/
+debug_chunking.py
+backend/tests/integration/
+backend/scripts/
 Research Files/
 OpenRouter Files/
 law documents/

@@ -1,16 +1,23 @@
 import { useEffect, useRef } from "react";
 import { Typography } from "antd";
+import { CodeOutlined } from "@ant-design/icons";
 import { useErrStore } from "@/lib/store";
 
 const { Text } = Typography;
 
 const statusConfig: Record<string, { color: string; bg: string }> = {
-  idle: { color: "#8e8e93", bg: "#3a3a3c" },
+  idle: { color: "#6b7280", bg: "rgba(107, 114, 128, 0.15)" },
   processing: { color: "#f59e0b", bg: "rgba(245, 158, 11, 0.15)" },
   ready: { color: "#22c55e", bg: "rgba(34, 197, 94, 0.15)" },
   error: { color: "#ef4444", bg: "rgba(239, 68, 68, 0.15)" },
 };
 
+/**
+ * Terminal Window Component - Displays ingestion logs
+ *
+ * Features macOS-style title bar with traffic lights
+ * and auto-scrolling log output.
+ */
 export function TerminalWindow() {
   const backendUrl = useErrStore((s) => s.backendUrl);
   const sessionId = useErrStore((s) => s.sessionId);
@@ -49,11 +56,11 @@ export function TerminalWindow() {
 
   return (
     <div
+      className="glass-panel"
       style={{
-        background: "#1c1c1e",
-        borderRadius: 12,
+        padding: 0,
         overflow: "hidden",
-        border: "1px solid #2c2c2e",
+        border: "1px solid #1f2937",
       }}
     >
       {/* Title bar - macOS style */}
@@ -61,9 +68,9 @@ export function TerminalWindow() {
         style={{
           display: "flex",
           alignItems: "center",
-          padding: "10px 14px",
-          background: "#2c2c2e",
-          borderBottom: "1px solid #3a3a3c",
+          padding: "12px 16px",
+          background: "rgba(20, 20, 26, 0.8)",
+          borderBottom: "1px solid #1f2937",
         }}
       >
         {/* Traffic lights */}
@@ -72,15 +79,18 @@ export function TerminalWindow() {
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#febc2e" }} />
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#28c840" }} />
         </div>
-        <Text style={{ color: "#a1a1a6", fontSize: 12, flex: 1 }}>Session Logs</Text>
+        <CodeOutlined style={{ color: "#00d4ff", fontSize: "14px", marginRight: 8 }} />
+        <Text style={{ color: "#9ca3af", fontSize: 12, flex: 1 }}>Session Logs</Text>
         <span
+          className="badge"
           style={{
-            fontSize: 11,
-            padding: "2px 8px",
-            borderRadius: 4,
+            fontSize: "10px",
+            padding: "3px 8px",
+            borderRadius: "4px",
             color: status.color,
             background: status.bg,
             fontWeight: 500,
+            border: `1px solid ${status.color}30`,
           }}
         >
           {uploadStatus}
@@ -91,23 +101,25 @@ export function TerminalWindow() {
       <div
         className="terminal-font"
         style={{
-          height: isDesktop ? "calc(100vh - 340px)" : 160,
-          minHeight: isDesktop ? 200 : 120,
+          height: isDesktop ? "calc(100vh - 380px)" : 160,
+          minHeight: isDesktop ? 180 : 120,
+          maxHeight: 300,
           overflow: "auto",
-          padding: 14,
-          fontSize: 12,
-          lineHeight: 1.7,
-          color: "#a1a1a6",
+          padding: "14px 16px",
+          fontSize: "12px",
+          lineHeight: "1.7",
+          color: "#9ca3af",
+          background: "rgba(5, 5, 7, 0.5)",
         }}
       >
         {!sessionId ? (
-          <Text style={{ color: "#8e8e93" }}>Upload a document to start...</Text>
+          <Text style={{ color: "#6b7280" }}>Upload a document to start...</Text>
         ) : logs.length === 0 ? (
-          <Text style={{ color: "#8e8e93" }}>Waiting for logs...</Text>
+          <Text style={{ color: "#6b7280" }}>Waiting for logs...</Text>
         ) : (
           logs.map((l, idx) => (
-            <div key={idx} style={{ color: l.includes("ERROR") ? "#ef4444" : "#a1a1a6" }}>
-              <span style={{ color: "#8e8e93" }}>$</span> {l}
+            <div key={idx} style={{ color: l.includes("ERROR") ? "#ef4444" : "#9ca3af", marginBottom: "2px" }}>
+              <span style={{ color: "#6b7280" }}>$</span> {l}
             </div>
           ))
         )}

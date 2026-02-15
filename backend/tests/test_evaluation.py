@@ -1,10 +1,16 @@
 import unittest
+import os
 from fastapi.testclient import TestClient
 from backend.app.main import app
 
 class TestEvaluationEndpoint(unittest.TestCase):
     def setUp(self):
+        os.environ.setdefault("OPENROUTER_API_KEY", "test-key")
         self.client = TestClient(app)
+        self.client.__enter__()
+
+    def tearDown(self):
+        self.client.__exit__(None, None, None)
 
     def test_evaluation_no_record_returns_404(self):
         # Create a new session ID that has no chat history/evaluation

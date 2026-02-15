@@ -94,6 +94,7 @@ class HybridRetriever:
         self._faiss_index = None
         self._bm25: BM25Okapi | None = None
         self._doc_language: Language | None = None
+        self._mrl_doc_embeddings_cache: dict[int, np.ndarray] = {}
 
         self._spacy_nlp = None
 
@@ -186,6 +187,16 @@ class HybridRetriever:
         self._doc_embeddings = doc_embeddings
         self._faiss_index = index
         self._bm25 = bm25
+        self._mrl_doc_embeddings_cache = {}
+
+    def _get_mrl_doc_embeddings(self, search_dim: int) -> np.ndarray:
+        cached = self._mrl_doc_embeddings_cache.get(search_dim)
+        if cached is not None:
+            return cached
+        assert self._doc_embeddings is not None
+        truncated = _l2_normalize(self._doc_embeddings[:, :search_dim])
+        self._mrl_doc_embeddings_cache[search_dim] = truncated
+        return truncated
 
     def search(
         self,
@@ -221,7 +232,7 @@ class HybridRetriever:
         use_mrl = search_dim is not None and 0 < search_dim < self.embedding_dim
         if use_mrl:
             query_emb_search = _l2_normalize(query_embedding[:, :search_dim])
-            doc_emb_search = _l2_normalize(self._doc_embeddings[:, :search_dim])
+            doc_emb_search = self._get_mrl_doc_embeddings(int(search_dim))
         else:
             query_emb_search = _l2_normalize(query_embedding)
             doc_emb_search = self._doc_embeddings  # already normalized
