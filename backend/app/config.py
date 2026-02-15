@@ -26,8 +26,9 @@ class Settings(BaseModel):
     # Chunking
     chunk_target_tokens: int = 6144
     chunk_overlap_tokens: int = 600
-    semantic_chunking_enabled: bool = True
+    semantic_chunking_enabled: bool = False
     semantic_chunking_threshold: float = 0.5
+    semantic_chunking_max_sentences: int = 2000
 
     # Re-packing strategy: "forward" (default order), "reverse" (most relevant at end)
     repack_strategy: str = "reverse"
@@ -64,6 +65,7 @@ class Settings(BaseModel):
 
     # Chat limits (approximate; we estimate tokens)
     chat_model_context_limit_tokens: int = 32768
+    fast_mode_language_alignment: bool = False
 
 
 def load_settings() -> Settings:
@@ -175,11 +177,12 @@ def load_settings() -> Settings:
             "ERR_EMBEDDING_QUERY_TASK",
             "Given a question, retrieve relevant passages from the document that explicitly contain the answer.",
         ),
-        # Chunking params - keep small for low-memory servers (2G)
-        chunk_target_tokens=512,
-        chunk_overlap_tokens=50,
-        semantic_chunking_enabled=True,
-        semantic_chunking_threshold=0.5,
+        # Chunking params - keep defaults safe for low-memory servers.
+        chunk_target_tokens=getenv_int("ERR_CHUNK_TARGET_TOKENS", 512),
+        chunk_overlap_tokens=getenv_int("ERR_CHUNK_OVERLAP_TOKENS", 50),
+        semantic_chunking_enabled=getenv_bool("ERR_SEMANTIC_CHUNKING_ENABLED", False),
+        semantic_chunking_threshold=getenv_float("ERR_SEMANTIC_CHUNKING_THRESHOLD", 0.5),
+        semantic_chunking_max_sentences=getenv_int("ERR_SEMANTIC_CHUNKING_MAX_SENTENCES", 2000),
         repack_strategy=os.getenv("ERR_REPACK_STRATEGY", "reverse"),
         embedding_aggregation_decay=getenv_float("ERR_EMBEDDING_AGGREGATION_DECAY", 0.7),
         query_fusion_enabled=getenv_bool("ERR_QUERY_FUSION_ENABLED", True),
@@ -204,4 +207,5 @@ def load_settings() -> Settings:
         chat_model_context_limit_tokens=getenv_int(
             "ERR_CHAT_MODEL_CONTEXT_LIMIT_TOKENS", 32768
         ),
+        fast_mode_language_alignment=getenv_bool("ERR_FAST_MODE_LANGUAGE_ALIGNMENT", False),
     )

@@ -131,6 +131,7 @@ async def _ingest_file(
         overlap_tokens=settings.chunk_overlap_tokens,
         semantic_enabled=settings.semantic_chunking_enabled,
         semantic_threshold=settings.semantic_chunking_threshold,
+        semantic_max_sentences=settings.semantic_chunking_max_sentences,
     )
     chunks = await loop.run_in_executor(None, lambda: chunker.chunk(blocks=blocks))
     await session.log(f"[LOG] Created {len(chunks)} chunks")
@@ -141,74 +142,86 @@ async def _ingest_file(
         await session.log("[LOG] ERROR: No chunks created from document")
         return
 
-    # Embed chunks in batches.
+    # Embed chunks in bounded concurrent batches and write directly into a
+    # contiguous float32 matrix to avoid large transient Python lists.
     await session.log("[LOG] Building vector embeddings (batched)...")
-    batch_size = 32
-    embeddings_list: list[list[float]] = []
-    detected_embedding_dim: int | None = None
-    total_batches = (len(chunks) + batch_size - 1) // batch_size
+    import numpy as np
 
-    # Concurrent embedding with semaphore
-    semaphore = asyncio.Semaphore(20)
-    tasks = []
+    batch_size = 32
+    max_inflight_batches = 8
+    detected_embedding_dim: int | None = None
+    embeddings_matrix: np.ndarray | None = None
+    total_batches = (len(chunks) + batch_size - 1) // batch_size
+    semaphore = asyncio.Semaphore(max_inflight_batches)
 
     async def _process_batch(b_idx: int):
         async with semaphore:
             start = b_idx * batch_size
             end = min(len(chunks), (b_idx + 1) * batch_size)
             assert session is not None
-            await session.log(f"[LOG] Embedding batch {b_idx+1}/{total_batches} ({start}-{end})...")
+            await session.log(
+                f"[LOG] Embedding batch {b_idx + 1}/{total_batches} ({start}-{end})..."
+            )
             texts = [c.content for c in chunks[start:end]]
             try:
                 embs = await openrouter.embeddings(model=settings.embedding_model, inputs=texts)
-            except Exception as e:
-                return b_idx, None, str(e)
-            
+            except Exception as e:  # noqa: BLE001
+                return b_idx, start, None, str(e)
+
             if embs.ndim != 2 or embs.shape[0] != len(texts):
-                return b_idx, None, f"Unexpected embeddings shape: {tuple(embs.shape)}"
-            
-            return b_idx, embs, None
+                return b_idx, start, None, f"Unexpected embeddings shape: {tuple(embs.shape)}"
 
-    for b in range(total_batches):
-        tasks.append(_process_batch(b))
-    
-    # Run all tasks
-    results = await asyncio.gather(*tasks)
-    
-    # Sort results by batch index to ensure order
-    results.sort(key=lambda x: x[0])
+            return b_idx, start, embs, None
 
-    for b_idx, embs, err in results:
-        if err:
-            async with session.lock:
-                session.ingest_status = "error"
-                session.ingest_error = err
-            await session.log(f"[LOG] ERROR embedding batch {b_idx+1}: {err}")
-            return
+    tasks = [asyncio.create_task(_process_batch(b_idx)) for b_idx in range(total_batches)]
+    try:
+        for completed in asyncio.as_completed(tasks):
+            b_idx, start, embs, err = await completed
+            if err:
+                pending = [t for t in tasks if not t.done()]
+                for pending_task in pending:
+                    pending_task.cancel()
+                if pending:
+                    await asyncio.gather(*pending, return_exceptions=True)
+                async with session.lock:
+                    session.ingest_status = "error"
+                    session.ingest_error = err
+                await session.log(f"[LOG] ERROR embedding batch {b_idx + 1}: {err}")
+                return
 
-        batch_dim = int(embs.shape[1])
-        if detected_embedding_dim is None:
-            detected_embedding_dim = batch_dim
-            await session.log(f"[LOG] Detected embedding dim: {detected_embedding_dim}")
-        elif batch_dim != detected_embedding_dim:
-            async with session.lock:
-                session.ingest_status = "error"
-                session.ingest_error = (
-                    f"Inconsistent embedding dim across batches: "
-                    f"expected {detected_embedding_dim}, got {batch_dim}"
+            batch_dim = int(embs.shape[1])
+            if detected_embedding_dim is None:
+                detected_embedding_dim = batch_dim
+                embeddings_matrix = np.empty(
+                    (len(chunks), detected_embedding_dim), dtype=np.float32
                 )
-            await session.log(
-                "[LOG] ERROR embedding: Inconsistent embedding dim across batches "
-                f"(expected {detected_embedding_dim}, got {batch_dim})"
-            )
-            return
-        
-        embeddings_list.extend(embs.tolist())
+                await session.log(f"[LOG] Detected embedding dim: {detected_embedding_dim}")
+            elif batch_dim != detected_embedding_dim:
+                async with session.lock:
+                    session.ingest_status = "error"
+                    session.ingest_error = (
+                        f"Inconsistent embedding dim across batches: "
+                        f"expected {detected_embedding_dim}, got {batch_dim}"
+                    )
+                await session.log(
+                    "[LOG] ERROR embedding: Inconsistent embedding dim across batches "
+                    f"(expected {detected_embedding_dim}, got {batch_dim})"
+                )
+                return
 
-    embeddings = embeddings_list
+            assert embeddings_matrix is not None
+            end = start + embs.shape[0]
+            embeddings_matrix[start:end, :] = embs
+    finally:
+        pending = [t for t in tasks if not t.done()]
+        for pending_task in pending:
+            pending_task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
     await session.log("[LOG] Building FAISS + BM25 indexes in memory...")
 
-    if detected_embedding_dim is None:
+    if detected_embedding_dim is None or embeddings_matrix is None:
         async with session.lock:
             session.ingest_status = "error"
             session.ingest_error = "Could not determine embedding dimension"
@@ -229,13 +242,9 @@ async def _ingest_file(
         candidate_k=100,
     )
     try:
-        import numpy as np
-
         await loop.run_in_executor(
             None,
-            lambda: retriever.build(
-                chunks=chunks, embeddings=np.asarray(embeddings, dtype=np.float32)
-            ),
+            lambda: retriever.build(chunks=chunks, embeddings=embeddings_matrix),
         )
     except Exception as e:  # noqa: BLE001
         async with session.lock:
@@ -462,27 +471,40 @@ async def chat(
     if not user_query:
         raise HTTPException(status_code=400, detail="Empty message")
 
-    await session.log("[LOG] Chat: translating query for keyword alignment...")
-    try:
-        expanded_query = await openrouter.translate_query_for_doc_language(
-            query=user_query, doc_language=str(doc_language)
-        )
-    except OpenRouterError as e:
-        raise HTTPException(status_code=502, detail=f"OpenRouter translate error: {e}") from e
-
     metrics = RetrievalMetrics(
         session_id=req.session_id,
         user_query=user_query,
         mode="fast" if req.fast_mode else "normal",
         start_time=datetime.now(),
     )
-    metrics.add_step(
-        "language_alignment",
-        data={
-            "original": user_query,
-            "translated": expanded_query,
-        },
-    )
+
+    expanded_query = user_query
+    should_align_language = (not req.fast_mode) or settings.fast_mode_language_alignment
+    if should_align_language:
+        await session.log("[LOG] Chat: translating query for keyword alignment...")
+        try:
+            expanded_query = await openrouter.translate_query_for_doc_language(
+                query=user_query, doc_language=str(doc_language)
+            )
+        except OpenRouterError as e:
+            raise HTTPException(status_code=502, detail=f"OpenRouter translate error: {e}") from e
+        metrics.add_step(
+            "language_alignment",
+            data={
+                "original": user_query,
+                "translated": expanded_query,
+            },
+        )
+    else:
+        await session.log("[LOG] Chat: fast mode -> skipping language alignment.")
+        metrics.add_step("language_alignment", skipped=True, reason="fast_mode")
+
+    async def _search_retriever_async(**kwargs):
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: retriever.search(**kwargs),
+        )
 
     if req.fast_mode:
         await session.log("[LOG] Chat: fast mode enabled -> baseline retrieval.")
@@ -507,7 +529,7 @@ async def chat(
         # Fast mode: use MRL (Matryoshka) lower dimension for faster search
         search_dim = settings.embedding_dim_fast_mode
         await session.log(f"[LOG] Chat: hybrid retrieval with MRL (dim={search_dim})...")
-        scored = retriever.search(
+        scored = await _search_retriever_async(
             query=user_query,
             query_embedding=query_embedding,
             expanded_query=expanded_query,
@@ -655,7 +677,7 @@ async def chat(
             v = query_vecs.get(q)
             if v is None:
                 continue
-            scored = retriever.search(
+            scored = await _search_retriever_async(
                 query=q,
                 query_embedding=v,
                 expanded_query=q,
@@ -671,7 +693,7 @@ async def chat(
                 rankings.append(ranking_ids)
 
         if use_hyde and hyde_vec is not None:
-            scored = retriever.search(
+            scored = await _search_retriever_async(
                 query=base_query,
                 query_embedding=hyde_vec,
                 expanded_query=base_query,
@@ -702,7 +724,7 @@ async def chat(
 
         # Fall back to a single retrieval if fusion failed unexpectedly.
         if not candidate_chunks:
-            scored = retriever.search(
+            scored = await _search_retriever_async(
                 query=base_query,
                 query_embedding=base_vec if base_vec is not None else q_embs[0],
                 expanded_query=base_query,

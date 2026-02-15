@@ -153,7 +153,7 @@ docker compose up --build
 cd backend
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.txt -c constraints.txt
 
 cp .env.example .env
 # 编辑 .env，设置 OPENROUTER_API_KEY

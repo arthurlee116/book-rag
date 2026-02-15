@@ -1,6 +1,6 @@
 # Backend (ERR)
 
-FastAPI backend for ERR (Ephemeral RAG Reader). Handles file upload + ingestion, builds in-memory indexes, and serves chat/retrieval APIs to the Next.js frontend.
+FastAPI backend for ERR (Ephemeral RAG Reader). Handles file upload + ingestion, builds in-memory indexes, and serves chat/retrieval APIs to the Vite + React frontend.
 
 ## Requirements
 
@@ -14,7 +14,7 @@ From the repo root:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r backend/requirements.txt
+pip install -r backend/requirements.txt -c backend/constraints.txt
 ```
 
 ## Configure environment
@@ -60,5 +60,4 @@ curl http://localhost:8000/health
 - `OPENROUTER_API_KEY is not set`
   - Ensure `backend/.env` exists and contains `OPENROUTER_API_KEY=...`, or export it in your shell.
 - Port already in use
-  - Change with `--port 8000` → `--port 8001` and update `frontend/.env.local` (`NEXT_PUBLIC_BACKEND_URL`).
-
+  - Change with `--port 8000` → `--port 8001` and update `frontend/.env.local` (`VITE_BACKEND_URL`).

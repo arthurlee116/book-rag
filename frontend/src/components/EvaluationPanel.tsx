@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Button, Collapse, Table, Tag, Typography } from "antd";
-import { DownOutlined, UpOutlined } from "@ant-design/icons";
+import { DownOutlined, UpOutlined, BarChartOutlined } from "@ant-design/icons";
 import { useErrStore } from "@/lib/store";
 import type { Evaluation, RetrievalStepData } from "@/lib/types";
 
@@ -21,23 +21,24 @@ function buildSimpleTable(
   columns: { key: string; title: string }[],
 ) {
   return (
-    <Table
-      size="small"
-      pagination={false}
-      dataSource={rows.map((row, idx) => ({ key: `${idx}`, ...row }))}
+      <Table
+        size="small"
+        pagination={false}
+        dataSource={rows.map((row, idx) => ({ key: `${idx}`, ...row }))}
       columns={columns.map((col) => ({
         title: col.title,
         dataIndex: col.key,
         key: col.key,
         render: (value: unknown) => (value === undefined || value === null ? "-" : String(value)),
       }))}
+      style={{ background: "transparent" }}
     />
   );
 }
 
 function renderStepDetails(step: RetrievalStepData) {
   const data = step.data ?? {};
-  if (!isRecord(data)) return <Text type="secondary">No data recorded.</Text>;
+  if (!isRecord(data)) return <Text style={{ color: "#6b7280" }}>No data recorded.</Text>;
 
   const chunks = getRecordArray(data.chunks);
   if (chunks) {
@@ -100,7 +101,7 @@ function renderStepDetails(step: RetrievalStepData) {
   }
 
   return (
-    <pre style={{ margin: 0, whiteSpace: "pre-wrap", color: "#a1a1a6" }}>
+    <pre style={{ margin: 0, whiteSpace: "pre-wrap", color: "#9ca3af", fontSize: "12px" }}>
       {JSON.stringify(data, null, 2)}
     </pre>
   );
@@ -111,7 +112,7 @@ function buildPanels(evaluation: Evaluation) {
     key: `${step.name}-${idx}`,
     label: (
       <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <Text style={{ color: "#f5f5f7" }}>{step.name}</Text>
+        <Text style={{ color: "#e5e5e5" }}>{step.name}</Text>
         {step.skipped ? (
           <Tag color="red">skipped</Tag>
         ) : (
@@ -122,7 +123,7 @@ function buildPanels(evaluation: Evaluation) {
     children: (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {step.reason && (
-          <Text type="secondary">Reason: {step.reason}</Text>
+          <Text style={{ color: "#6b7280", fontSize: "12px" }}>Reason: {step.reason}</Text>
         )}
         {renderStepDetails(step)}
       </div>
@@ -130,6 +131,12 @@ function buildPanels(evaluation: Evaluation) {
   }));
 }
 
+/**
+ * Evaluation Panel Component - Displays retrieval pipeline metrics
+ *
+ * Shows detailed breakdown of each retrieval step including
+ * query expansion, vector search, BM25, fusion, and reranking.
+ */
 export function EvaluationPanel() {
   const sessionId = useErrStore((s) => s.sessionId);
   const evaluation = useErrStore((s) => s.evaluation);
@@ -153,28 +160,35 @@ export function EvaluationPanel() {
 
   return (
     <div
+      className="glass-panel"
       style={{
-        background: "#1c1c1e",
-        borderRadius: 12,
-        padding: 16,
-        border: "1px solid #2c2c2e",
+        padding: "16px",
+        border: "1px solid #1f2937",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <Text strong style={{ color: "#f5f5f7", fontSize: 13 }}>Retrieval Evaluation</Text>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <BarChartOutlined style={{ color: "#00d4ff", fontSize: "14px" }} />
+          <Text strong style={{ color: "#e5e5e5", fontSize: "14px" }}>Retrieval Evaluation</Text>
+        </div>
         <div style={{ display: "flex", gap: 8 }}>
           <Button
             size="small"
             type="text"
             icon={collapsed ? <DownOutlined /> : <UpOutlined />}
             onClick={() => setCollapsed(!collapsed)}
-            style={{ color: "#a1a1a6" }}
+            style={{ color: "#9ca3af" }}
           />
           <Button
             size="small"
             onClick={onFetch}
             disabled={!sessionId || loading}
-            style={{ background: "#3a3a3c", borderColor: "transparent", color: "#a1a1a6" }}
+            style={{
+              background: "#14141a",
+              borderColor: "#1f2937",
+              color: "#9ca3af",
+              height: "32px",
+            }}
           >
             {loading ? "Loading..." : "Load Latest"}
           </Button>
@@ -183,30 +197,52 @@ export function EvaluationPanel() {
 
       {!collapsed && (
         !sessionId ? (
-          <Text style={{ color: "#8e8e93" }}>Upload a document to start a session.</Text>
+          <Text style={{ color: "#6b7280", fontSize: "13px" }}>Upload a document to start a session.</Text>
         ) : !evaluation ? (
-          <Text style={{ color: "#8e8e93" }}>No evaluation loaded yet.</Text>
+          <Text style={{ color: "#6b7280", fontSize: "13px" }}>No evaluation loaded yet.</Text>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <Tag color={evaluation.mode === "fast" ? "gold" : "blue"}>
+              <Tag
+                color={evaluation.mode === "fast" ? "gold" : "blue"}
+                style={{
+                  background: evaluation.mode === "fast"
+                    ? "rgba(245, 158, 11, 0.15)"
+                    : "rgba(59, 130, 246, 0.15)",
+                  borderColor: evaluation.mode === "fast"
+                    ? "rgba(245, 158, 11, 0.3)"
+                    : "rgba(59, 130, 246, 0.3)",
+                  color: evaluation.mode === "fast" ? "#f59e0b" : "#3b82f6",
+                }}
+              >
                 {evaluation.mode === "fast" ? "fast mode" : "normal mode"}
               </Tag>
-              <Text style={{ color: "#a1a1a6", fontSize: 12 }}>
+              <Text style={{ color: "#6b7280", fontSize: "11px" }}>
                 {new Date(evaluation.timestamp).toLocaleString()}
               </Text>
             </div>
-            <div style={{ background: "#2c2c2e", borderRadius: 8, padding: 12 }}>
-              <Text style={{ color: "#a1a1a6", fontSize: 12 }}>User Query</Text>
-              <div style={{ color: "#f5f5f7", marginTop: 6 }}>{evaluation.user_query}</div>
+            <div
+              style={{
+                background: "rgba(20, 20, 26, 0.5)",
+                borderRadius: 8,
+                padding: "12px",
+                border: "1px solid #1f2937",
+              }}
+            >
+              <Text style={{ color: "#6b7280", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                User Query
+              </Text>
+              <div style={{ color: "#e5e5e5", marginTop: "6px", fontSize: "13px" }}>
+                {evaluation.user_query}
+              </div>
             </div>
             <Collapse
               size="small"
               items={panels}
-              style={{ background: "#1c1c1e" }}
+              style={{ background: "transparent" }}
             />
             {!isDesktop && (
-              <Text style={{ color: "#8e8e93", fontSize: 12 }}>
+              <Text style={{ color: "#6b7280", fontSize: "12px" }}>
                 Tip: expand steps for ranking details.
               </Text>
             )}

@@ -7,11 +7,13 @@ const projectRoot = path.resolve(__dirname, "..", "..");
 const manifestPath = path.join(projectRoot, "dist", ".vite", "manifest.json");
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 
+// Keep this aligned with `lazy()` usage in `src/App.tsx`.
 const expectedDynamicModules = [
-  "src/components/UploadPanel.tsx",
   "src/components/ChatPanel.tsx",
-  "src/components/TerminalWindow.tsx",
   "src/components/DocumentPanel.tsx",
+  "src/components/EvaluationPanel.tsx",
+  "src/components/TerminalWindow.tsx",
+  "src/components/UploadPanel.tsx",
 ];
 
 const missing = expectedDynamicModules.filter((modulePath) => {

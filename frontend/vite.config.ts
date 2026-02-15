@@ -32,9 +32,6 @@ export default defineConfig(({ mode }) => {
             if (id.includes("node_modules/react")) {
               return "react-vendor";
             }
-            if (id.includes("node_modules/antd") || id.includes("node_modules/@ant-design")) {
-              return "antd-vendor";
-            }
           },
         },
       },
