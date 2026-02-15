@@ -95,6 +95,7 @@ class HybridRetriever:
         self._bm25: BM25Okapi | None = None
         self._doc_language: Language | None = None
         self._mrl_doc_embeddings_cache: dict[int, np.ndarray] = {}
+        self._chunk_id_to_index: dict[str, int] = {}
 
         self._spacy_nlp = None
 
@@ -169,6 +170,7 @@ class HybridRetriever:
             )
 
         self._chunks = chunks
+        self._chunk_id_to_index = {chunk.id: idx for idx, chunk in enumerate(chunks)}
         self._doc_language = doc_language or detect_dominant_language(
             " ".join(c.content for c in chunks[: min(8, len(chunks))])
         )
@@ -248,8 +250,13 @@ class HybridRetriever:
             # Direct computation for MRL (no pre-built index for truncated dims)
             scores = (query_emb_search @ doc_emb_search.T).flatten()
             all_scores_mrl = scores
-            vec_ids_list = np.argsort(-scores)[:vec_fetch_k].tolist()
-            vec_scores_flat = scores[vec_ids_list]
+            if vec_fetch_k == n_docs:
+                vec_ids_arr = np.argsort(-scores)
+            else:
+                vec_ids_arr = np.argpartition(-scores, vec_fetch_k - 1)[:vec_fetch_k]
+                vec_ids_arr = vec_ids_arr[np.argsort(-scores[vec_ids_arr])]
+            vec_ids_list = vec_ids_arr.tolist()
+            vec_scores_flat = scores[vec_ids_arr]
         else:
             vec_scores_raw, vec_ids = self._faiss_index.search(query_emb_search, vec_fetch_k)
             vec_ids_list = [int(i) for i in vec_ids[0] if int(i) >= 0]
@@ -340,7 +347,7 @@ class HybridRetriever:
                 "topk_chunks": [
                     {
                         "chunk_id": s.chunk.id,
-                        "chunk_idx": self._chunks.index(s.chunk),
+                        "chunk_idx": self._chunk_id_to_index.get(s.chunk.id, -1),
                         "final_score": s.final_score,
                         "vector_score": s.vector_score,
                         "bm25_norm": s.bm25_score_norm

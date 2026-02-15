@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 import httpx
 import numpy as np
-from tenacity import retry, stop_after_attempt, wait_exponential_jitter
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential_jitter
 
 from .config import Settings
 
@@ -17,6 +17,15 @@ class OpenRouterError(RuntimeError):
     def __init__(self, message: str, *, status_code: int | None = None) -> None:
         super().__init__(message)
         self.status_code = status_code
+
+
+def _is_retryable_exception(exc: BaseException) -> bool:
+    # Retry transient transport failures and rate-limit/server-side failures only.
+    if isinstance(exc, (httpx.TimeoutException, httpx.TransportError)):
+        return True
+    if isinstance(exc, OpenRouterError):
+        return exc.status_code in {408, 409, 429, 500, 502, 503, 504}
+    return False
 
 
 def _extract_error_message(payload: Any) -> str | None:
@@ -60,7 +69,12 @@ class OpenRouterClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential_jitter(initial=0.5, max=4.0))
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=0.5, max=4.0),
+        retry=retry_if_exception(_is_retryable_exception),
+        reraise=True,
+    )
     async def embeddings(self, *, model: str, inputs: list[str]) -> np.ndarray:
         """
         Returns float32 ndarray of shape (len(inputs), embedding_dim).
@@ -102,7 +116,12 @@ class OpenRouterClient:
         arr = np.asarray(vectors, dtype=np.float32)
         return arr
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential_jitter(initial=0.5, max=4.0))
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=0.5, max=4.0),
+        retry=retry_if_exception(_is_retryable_exception),
+        reraise=True,
+    )
     async def chat_completion(
         self,
         *,

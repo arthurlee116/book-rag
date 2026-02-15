@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
+from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -35,6 +36,7 @@ class RetrievalMetrics:
     mode: str
     start_time: datetime
     steps: List[Dict[str, Any]] = field(default_factory=list)
+    _lock: Lock = field(default_factory=Lock, repr=False)
 
     def add_step(
         self,
@@ -50,16 +52,20 @@ class RetrievalMetrics:
             "reason": reason,
             "data": data if data else None,
         }
-        self.steps.append(step_data)
+        with self._lock:
+            self.steps.append(step_data)
 
     def to_record(self) -> EvaluationRecord:
         timestamp = self.start_time.isoformat()
+        with self._lock:
+            steps_snapshot = list(self.steps)
+
         pyd_steps = [
-            RetrievalStep(**step) for step in self.steps
+            RetrievalStep(**step) for step in steps_snapshot
         ]
         # Extract final_context from the last "final_context" step
         final_chunks = []
-        for step in reversed(self.steps):
+        for step in reversed(steps_snapshot):
             if step.get("name") == "final_context":
                 raw_chunks = step.get("data", {}).get("chunks", [])
                 final_chunks = [

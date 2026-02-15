@@ -22,10 +22,11 @@ class Settings(BaseModel):
     embedding_query_task: str = (
         "Given a question, retrieve relevant passages from the document that explicitly contain the answer."
     )
+    fast_mode_include_raw_query: bool = False
 
     # Chunking
-    chunk_target_tokens: int = 6144
-    chunk_overlap_tokens: int = 600
+    chunk_target_tokens: int = 512
+    chunk_overlap_tokens: int = 50
     semantic_chunking_enabled: bool = False
     semantic_chunking_threshold: float = 0.5
     semantic_chunking_max_sentences: int = 2000
@@ -45,17 +46,18 @@ class Settings(BaseModel):
 
     # Query drift filtering
     drift_filter_enabled: bool = True
-    drift_sim_threshold: float = 0.8
-    hyde_drift_sim_threshold: float = 0.6
+    drift_sim_threshold: float = 0.25
+    hyde_drift_sim_threshold: float = 0.15
 
     # Fusion parameters
     rrf_k: int = 60
     fusion_per_query_top_k: int = 50
     fusion_max_candidates: int = 120
+    retrieval_parallelism: int = 4
 
     # LLM rerank (yes/no judge using chat model)
     llm_rerank_enabled: bool = True
-    llm_rerank_model: str = ""  # default: use chat_model
+    llm_rerank_model: str = ""  # default: use chat_model_complex
     llm_rerank_candidate_pool: int = 30
     llm_rerank_max_chars: int = 900
 
@@ -177,6 +179,7 @@ def load_settings() -> Settings:
             "ERR_EMBEDDING_QUERY_TASK",
             "Given a question, retrieve relevant passages from the document that explicitly contain the answer.",
         ),
+        fast_mode_include_raw_query=getenv_bool("ERR_FAST_MODE_INCLUDE_RAW_QUERY", False),
         # Chunking params - keep defaults safe for low-memory servers.
         chunk_target_tokens=getenv_int("ERR_CHUNK_TARGET_TOKENS", 512),
         chunk_overlap_tokens=getenv_int("ERR_CHUNK_OVERLAP_TOKENS", 50),
@@ -196,6 +199,7 @@ def load_settings() -> Settings:
         rrf_k=getenv_int("ERR_RRF_K", 60),
         fusion_per_query_top_k=getenv_int("ERR_FUSION_PER_QUERY_TOP_K", 50),
         fusion_max_candidates=getenv_int("ERR_FUSION_MAX_CANDIDATES", 120),
+        retrieval_parallelism=getenv_int("ERR_RETRIEVAL_PARALLELISM", 4),
         llm_rerank_enabled=getenv_bool("ERR_LLM_RERANK_ENABLED", True),
         llm_rerank_model=os.getenv("ERR_LLM_RERANK_MODEL", ""),
         llm_rerank_candidate_pool=getenv_int("ERR_LLM_RERANK_CANDIDATE_POOL", 30),

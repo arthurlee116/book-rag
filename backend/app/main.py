@@ -386,7 +386,12 @@ def _weighted_embedding_mean(embeddings, *, decay: float = 0.7):
 
 
 
-def _build_embedding_query_inputs(*, settings: Settings, queries: list[str]) -> list[str]:
+def _build_embedding_query_inputs(
+    *,
+    settings: Settings,
+    queries: list[str],
+    include_raw_override: bool | None = None,
+) -> list[str]:
     """
     Build embedding inputs for user queries, optionally using instruction-aware format.
     """
@@ -405,7 +410,12 @@ def _build_embedding_query_inputs(*, settings: Settings, queries: list[str]) -> 
                 # Fallback: if template is invalid, still provide something reasonable.
                 inputs.append(f"Instruct: {task}\nQuery:{q}")
 
-    if settings.embedding_query_include_raw or not inputs:
+    include_raw = (
+        settings.embedding_query_include_raw
+        if include_raw_override is None
+        else bool(include_raw_override)
+    )
+    if include_raw or not inputs:
         inputs.extend(queries)
 
     return _unique_nonempty(inputs)
@@ -449,6 +459,102 @@ def _extract_citation_numbers(answer: str) -> list[int]:
     return extract_citation_numbers(answer)
 
 
+async def _align_query_for_retrieval(
+    *,
+    session,
+    openrouter: OpenRouterClient,
+    user_query: str,
+    doc_language: str,
+    should_align: bool,
+    metrics: RetrievalMetrics,
+) -> str:
+    if not should_align:
+        await session.log("[LOG] Chat: fast mode -> skipping language alignment.")
+        metrics.add_step("language_alignment", skipped=True, reason="fast_mode")
+        return user_query
+
+    await session.log("[LOG] Chat: translating query for keyword alignment...")
+    try:
+        expanded_query = await openrouter.translate_query_for_doc_language(
+            query=user_query, doc_language=str(doc_language)
+        )
+    except OpenRouterError as e:
+        await session.log(
+            f"[LOG] WARNING: language alignment failed ({e}); using original query."
+        )
+        metrics.add_step(
+            "language_alignment",
+            skipped=True,
+            reason="api_error_fallback",
+            data={
+                "original": user_query,
+                "translated": user_query,
+            },
+        )
+        return user_query
+
+    metrics.add_step(
+        "language_alignment",
+        data={
+            "original": user_query,
+            "translated": expanded_query,
+        },
+    )
+    return expanded_query
+
+
+async def _build_normal_mode_query_expansions(
+    *,
+    session,
+    openrouter: OpenRouterClient,
+    settings: Settings,
+    base_query: str,
+    user_query: str,
+    doc_language: str,
+) -> tuple[list[str], str]:
+    variants: list[str] = []
+    hyde_text = ""
+
+    tasks: dict[str, asyncio.Task] = {}
+    if settings.query_fusion_enabled:
+        await session.log("[LOG] Chat: generating query variants (multi-query)...")
+        tasks["variants"] = asyncio.create_task(
+            openrouter.generate_query_variants(
+                query=base_query,
+                doc_language=str(doc_language),
+                n=settings.query_variants_count,
+            )
+        )
+    if settings.hyde_enabled:
+        await session.log("[LOG] Chat: generating HyDE passage (retrieval-only)...")
+        tasks["hyde"] = asyncio.create_task(
+            openrouter.generate_hyde_passage(
+                query=base_query,
+                doc_language=str(doc_language),
+                max_words=settings.hyde_max_words,
+            )
+        )
+
+    if tasks:
+        task_names = list(tasks.keys())
+        results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+        for name, result in zip(task_names, results):
+            if isinstance(result, Exception):
+                await session.log(f"[LOG] WARNING: {name} generation failed: {result}")
+                continue
+            if name == "variants":
+                variants = [v for v in result if isinstance(v, str)]  # type: ignore[union-attr]
+            elif name == "hyde":
+                hyde_text = str(result or "").strip()
+
+    if settings.query_fusion_enabled:
+        query_texts = dedupe_keep_order([base_query, user_query] + variants)
+    else:
+        query_texts = dedupe_keep_order([base_query, user_query])
+
+    return query_texts, hyde_text
+
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat(
     req: ChatRequest,
@@ -478,26 +584,15 @@ async def chat(
         start_time=datetime.now(),
     )
 
-    expanded_query = user_query
     should_align_language = (not req.fast_mode) or settings.fast_mode_language_alignment
-    if should_align_language:
-        await session.log("[LOG] Chat: translating query for keyword alignment...")
-        try:
-            expanded_query = await openrouter.translate_query_for_doc_language(
-                query=user_query, doc_language=str(doc_language)
-            )
-        except OpenRouterError as e:
-            raise HTTPException(status_code=502, detail=f"OpenRouter translate error: {e}") from e
-        metrics.add_step(
-            "language_alignment",
-            data={
-                "original": user_query,
-                "translated": expanded_query,
-            },
-        )
-    else:
-        await session.log("[LOG] Chat: fast mode -> skipping language alignment.")
-        metrics.add_step("language_alignment", skipped=True, reason="fast_mode")
+    expanded_query = await _align_query_for_retrieval(
+        session=session,
+        openrouter=openrouter,
+        user_query=user_query,
+        doc_language=str(doc_language),
+        should_align=should_align_language,
+        metrics=metrics,
+    )
 
     async def _search_retriever_async(**kwargs):
         loop = asyncio.get_running_loop()
@@ -512,7 +607,11 @@ async def chat(
         await session.log("[LOG] Chat: embedding query (instruction-aware)...")
         try:
             query_variants = _unique_nonempty([user_query, expanded_query])
-            embed_inputs = _build_embedding_query_inputs(settings=settings, queries=query_variants)
+            embed_inputs = _build_embedding_query_inputs(
+                settings=settings,
+                queries=query_variants,
+                include_raw_override=settings.fast_mode_include_raw_query,
+            )
             if not embed_inputs:
                 raise HTTPException(status_code=400, detail="Empty message")
             q_embs = await openrouter.embeddings(model=settings.embedding_model, inputs=embed_inputs)
@@ -546,36 +645,14 @@ async def chat(
     else:
         base_query = (expanded_query or "").strip() or user_query
 
-        query_texts: list[str] = [base_query]
-        hyde_text: str = ""
-        if settings.query_fusion_enabled:
-            await session.log("[LOG] Chat: generating query variants (multi-query)...")
-            try:
-                variants = await openrouter.generate_query_variants(
-                    query=base_query,
-                    doc_language=str(doc_language),
-                    n=settings.query_variants_count,
-                )
-            except OpenRouterError as e:
-                await session.log(f"[LOG] WARNING: query variants failed: {e}")
-                variants = []
-
-            # Keep the raw query too (useful for cross-lingual names / phrasing).
-            query_texts = dedupe_keep_order([base_query, user_query] + variants)
-
-            if settings.hyde_enabled:
-                await session.log("[LOG] Chat: generating HyDE passage (retrieval-only)...")
-                try:
-                    hyde_text = await openrouter.generate_hyde_passage(
-                        query=base_query,
-                        doc_language=str(doc_language),
-                        max_words=settings.hyde_max_words,
-                    )
-                except OpenRouterError as e:
-                    await session.log(f"[LOG] WARNING: HyDE generation failed: {e}")
-                    hyde_text = ""
-        else:
-            query_texts = dedupe_keep_order([base_query, user_query])
+        query_texts, hyde_text = await _build_normal_mode_query_expansions(
+            session=session,
+            openrouter=openrouter,
+            settings=settings,
+            base_query=base_query,
+            user_query=user_query,
+            doc_language=str(doc_language),
+        )
 
         # Embed all query texts (and optional HyDE) in one call.
         await session.log("[LOG] Chat: embedding query variants (instruction-aware)...")
@@ -672,41 +749,46 @@ async def chat(
         await session.log("[LOG] Chat: retrieval (multi-query + RRF fusion)...")
         rankings: list[list[str]] = []
         id_to_chunk: dict[str, ChunkModel] = {}
-
+        retrieval_jobs: list[tuple[str, np.ndarray, str]] = []
         for q in query_texts:
             v = query_vecs.get(q)
             if v is None:
                 continue
-            scored = await _search_retriever_async(
-                query=q,
-                query_embedding=v,
-                expanded_query=q,
-                top_k=settings.fusion_per_query_top_k,
-                metrics=metrics
-            )
-            ranking_ids: list[str] = []
-            for s in scored:
-                cid = s.chunk.id
-                ranking_ids.append(cid)
-                id_to_chunk[cid] = s.chunk
-            if ranking_ids:
-                rankings.append(ranking_ids)
+            retrieval_jobs.append((q, v, q))
 
         if use_hyde and hyde_vec is not None:
-            scored = await _search_retriever_async(
-                query=base_query,
-                query_embedding=hyde_vec,
-                expanded_query=base_query,
-                top_k=settings.fusion_per_query_top_k,
-                metrics=metrics
-            )
-            ranking_ids = []
-            for s in scored:
+            retrieval_jobs.append((base_query, hyde_vec, base_query))
+
+        retrieval_parallelism = max(1, int(settings.retrieval_parallelism))
+        sem = asyncio.Semaphore(retrieval_parallelism)
+
+        async def _run_retrieval(
+            query_text: str, emb: np.ndarray, expanded: str
+        ) -> tuple[list[str], dict[str, ChunkModel]]:
+            async with sem:
+                scored_local = await _search_retriever_async(
+                    query=query_text,
+                    query_embedding=emb,
+                    expanded_query=expanded,
+                    top_k=settings.fusion_per_query_top_k,
+                    metrics=metrics,
+                )
+            ranking_ids_local: list[str] = []
+            id_map_local: dict[str, ChunkModel] = {}
+            for s in scored_local:
                 cid = s.chunk.id
-                ranking_ids.append(cid)
-                id_to_chunk[cid] = s.chunk
-            if ranking_ids:
-                rankings.append(ranking_ids)
+                ranking_ids_local.append(cid)
+                id_map_local[cid] = s.chunk
+            return ranking_ids_local, id_map_local
+
+        if retrieval_jobs:
+            retrieval_results = await asyncio.gather(
+                *[_run_retrieval(q, emb, expanded) for q, emb, expanded in retrieval_jobs]
+            )
+            for ranking_ids, local_map in retrieval_results:
+                if ranking_ids:
+                    rankings.append(ranking_ids)
+                id_to_chunk.update(local_map)
 
         fused_ids = rrf_fuse(
             rankings, k=settings.rrf_k, max_results=settings.fusion_max_candidates

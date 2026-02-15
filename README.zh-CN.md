@@ -240,6 +240,8 @@ ERR_REPACK_STRATEGY=reverse        # 将最佳块放在查询附近
 
 # 性能配置
 ERR_EMBEDDING_DIM_FAST_MODE=1024   # 快速模式的 MRL 维度
+ERR_FAST_MODE_INCLUDE_RAW_QUERY=false  # 快速模式下是否额外嵌入 raw query（默认关闭以降低延迟）
+ERR_RETRIEVAL_PARALLELISM=4       # 标准模式多查询检索并发上限
 ERR_SESSION_TTL_SECONDS=1800       # 会话超时（30 分钟）
 ```
 
