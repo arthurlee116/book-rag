@@ -200,8 +200,8 @@ class OpenRouterClient:
             return None
 
         # Strip ```json fences if present.
-        raw = re.sub(r"^```(?:json)?\\s*", "", raw, flags=re.IGNORECASE)
-        raw = re.sub(r"\\s*```$", "", raw)
+        raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.IGNORECASE)
+        raw = re.sub(r"\s*```$", "", raw)
 
         # Fast path: already valid JSON.
         try:

@@ -26,7 +26,10 @@ ERR (Ephemeral RAG Reader) is a privacy-first document Q&A web app. Users upload
 ## Project Structure & Module Organization
 
 - `backend/`: FastAPI service (Python). Core code lives in `backend/app/`:
-  - `backend/app/main.py`: app lifecycle, CORS, routes, ingestion and chat orchestration.
+  - `backend/app/main.py`: app lifecycle, CORS, and router mounting.
+  - `backend/app/routes.py`: API route definitions.
+  - `backend/app/ingestion_pipeline.py`: upload ingestion orchestration.
+  - `backend/app/chat_pipeline.py`: chat retrieval/answer orchestration.
   - `backend/app/config.py`: `Settings` and env loading (supports `ENV_FILE=/path/to/.env`).
   - `backend/app/openrouter_client.py`: OpenRouter HTTP wrapper for chat + embeddings.
   - `backend/app/session_store.py`: in-memory sessions, locks, TTL cleanup.

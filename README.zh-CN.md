@@ -217,8 +217,8 @@ npm run dev
 | 搜索维度 | 4096 | 1024 (MRL) |
 | 查询扩展 | ✅ 多查询 + HyDE | ❌ |
 | LLM 重排序 | ✅ | ❌ |
-| 重新打包 | ✅ 反向 | ❌ |
-| 嵌入聚合 | 加权 | 简单平均 |
+| 重新打包 | ✅ 反向 | ✅ 反向 |
+| 嵌入聚合 | 加权 | 加权（偏向原始查询） |
 
 ## ⚙️ 配置说明
 
@@ -241,6 +241,9 @@ ERR_REPACK_STRATEGY=reverse        # 将最佳块放在查询附近
 # 性能配置
 ERR_EMBEDDING_DIM_FAST_MODE=1024   # 快速模式的 MRL 维度
 ERR_FAST_MODE_INCLUDE_RAW_QUERY=false  # 快速模式下是否额外嵌入 raw query（默认关闭以降低延迟）
+ERR_FAST_MODE_EMBEDDING_AGGREGATION_DECAY=0.7  # 快速模式查询聚合衰减
+ERR_FAST_MODE_CANDIDATE_K=50      # 快速模式候选池大小
+ERR_RETRIEVER_CANDIDATE_K=100     # 标准模式候选池大小
 ERR_RETRIEVAL_PARALLELISM=4       # 标准模式多查询检索并发上限
 ERR_SESSION_TTL_SECONDS=1800       # 会话超时（30 分钟）
 ```

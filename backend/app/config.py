@@ -18,11 +18,12 @@ class Settings(BaseModel):
     embedding_dim_fast_mode: int = 1024  # MRL: use lower dimension in fast mode for speed
     embedding_query_use_instruction: bool = True
     embedding_query_include_raw: bool = True
-    embedding_query_instruction_template: str = "Instruct: {task}\nQuery:{query}"
+    embedding_query_instruction_template: str = "Instruct: {task}\nQuery: {query}"
     embedding_query_task: str = (
         "Given a question, retrieve relevant passages from the document that explicitly contain the answer."
     )
     fast_mode_include_raw_query: bool = False
+    fast_mode_embedding_aggregation_decay: float = 0.7
 
     # Chunking
     chunk_target_tokens: int = 512
@@ -54,6 +55,8 @@ class Settings(BaseModel):
     fusion_per_query_top_k: int = 50
     fusion_max_candidates: int = 120
     retrieval_parallelism: int = 4
+    retriever_candidate_k: int = 100
+    fast_mode_candidate_k: int = 50
 
     # LLM rerank (yes/no judge using chat model)
     llm_rerank_enabled: bool = True
@@ -173,13 +176,16 @@ def load_settings() -> Settings:
         embedding_query_include_raw=getenv_bool("ERR_EMBEDDING_QUERY_INCLUDE_RAW", True),
         embedding_query_instruction_template=os.getenv(
             "ERR_EMBEDDING_QUERY_INSTRUCTION_TEMPLATE",
-            "Instruct: {task}\nQuery:{query}",
+            "Instruct: {task}\nQuery: {query}",
         ),
         embedding_query_task=os.getenv(
             "ERR_EMBEDDING_QUERY_TASK",
             "Given a question, retrieve relevant passages from the document that explicitly contain the answer.",
         ),
         fast_mode_include_raw_query=getenv_bool("ERR_FAST_MODE_INCLUDE_RAW_QUERY", False),
+        fast_mode_embedding_aggregation_decay=getenv_float(
+            "ERR_FAST_MODE_EMBEDDING_AGGREGATION_DECAY", 0.7
+        ),
         # Chunking params - keep defaults safe for low-memory servers.
         chunk_target_tokens=getenv_int("ERR_CHUNK_TARGET_TOKENS", 512),
         chunk_overlap_tokens=getenv_int("ERR_CHUNK_OVERLAP_TOKENS", 50),
@@ -200,6 +206,8 @@ def load_settings() -> Settings:
         fusion_per_query_top_k=getenv_int("ERR_FUSION_PER_QUERY_TOP_K", 50),
         fusion_max_candidates=getenv_int("ERR_FUSION_MAX_CANDIDATES", 120),
         retrieval_parallelism=getenv_int("ERR_RETRIEVAL_PARALLELISM", 4),
+        retriever_candidate_k=getenv_int("ERR_RETRIEVER_CANDIDATE_K", 100),
+        fast_mode_candidate_k=getenv_int("ERR_FAST_MODE_CANDIDATE_K", 50),
         llm_rerank_enabled=getenv_bool("ERR_LLM_RERANK_ENABLED", True),
         llm_rerank_model=os.getenv("ERR_LLM_RERANK_MODEL", ""),
         llm_rerank_candidate_pool=getenv_int("ERR_LLM_RERANK_CANDIDATE_POOL", 30),

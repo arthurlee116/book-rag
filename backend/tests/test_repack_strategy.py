@@ -23,15 +23,15 @@ class TestRepackStrategy(unittest.TestCase):
 
         self.assertEqual(repack_chunks(["a", "b", "c"], strategy="???"), ["c", "b", "a"])
 
-    def test_apply_repack_strategy_fast_mode_skips(self) -> None:
+    def test_apply_repack_strategy_applies_configured_strategy(self) -> None:
         from backend.app.repacking import apply_repack_strategy
 
         chunks = ["a", "b", "c"]
-        self.assertIs(
-            apply_repack_strategy(chunks, fast_mode=True, repack_strategy="reverse"),
-            chunks,
+        self.assertEqual(
+            apply_repack_strategy(chunks, repack_strategy="reverse"),
+            ["c", "b", "a"],
         )
         self.assertIs(
-            apply_repack_strategy(chunks, fast_mode=True, repack_strategy="forward"),
+            apply_repack_strategy(chunks, repack_strategy="forward"),
             chunks,
         )

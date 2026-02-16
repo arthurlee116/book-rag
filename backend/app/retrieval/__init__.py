@@ -1,7 +1,7 @@
 """
 Retrieval package.
 
-Keep __init__ import-light; HybridRetriever pulls in numpy/faiss and should be
+Keep __init__ import-light; HybridRetriever pulls in numpy/faiss/bm25s and should be
 imported explicitly from `backend.app.retrieval.hybrid_retriever`.
 """
 

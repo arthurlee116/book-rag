@@ -91,5 +91,51 @@ class TestHybridRetriever(unittest.TestCase):
         )
         self.assertEqual(len(results), 5)
 
+    def test_search_hyde_vector_only_disables_bm25(self):
+        rng = np.random.default_rng(404)
+        query_emb = rng.random((1, self.dim)).astype(np.float32)
+        results = self.retriever.search(
+            query="chunk",
+            query_embedding=query_emb,
+            top_k=5,
+            bm25_enabled=False,
+        )
+        self.assertEqual(len(results), 5)
+        self.assertTrue(all(r.bm25_score_norm == 0.0 for r in results))
+
+    def test_search_candidate_k_override_passed_to_bm25(self):
+        rng = np.random.default_rng(505)
+        query_emb = rng.random((1, self.dim)).astype(np.float32)
+        seen_k = {"value": None}
+        original_retrieve = self.retriever._bm25.retrieve
+
+        def wrapped_retrieve(*args, **kwargs):
+            seen_k["value"] = kwargs.get("k")
+            return original_retrieve(*args, **kwargs)
+
+        self.retriever._bm25.retrieve = wrapped_retrieve
+        try:
+            self.retriever.search(
+                query="chunk",
+                query_embedding=query_emb,
+                top_k=5,
+                candidate_k_override=7,
+            )
+        finally:
+            self.retriever._bm25.retrieve = original_retrieve
+
+        self.assertEqual(seen_k["value"], 7)
+
+    def test_search_mrl_faiss_index_cache_reused(self):
+        rng = np.random.default_rng(606)
+        query_emb = rng.random((1, self.dim)).astype(np.float32)
+        self.retriever.search(query="chunk", query_embedding=query_emb, top_k=5, search_dim=4)
+        self.assertIn(4, self.retriever._mrl_faiss_index_cache)
+        first_index = self.retriever._mrl_faiss_index_cache[4]
+
+        self.retriever.search(query="chunk", query_embedding=query_emb, top_k=5, search_dim=4)
+        second_index = self.retriever._mrl_faiss_index_cache[4]
+        self.assertIs(first_index, second_index)
+
 if __name__ == '__main__':
     unittest.main()

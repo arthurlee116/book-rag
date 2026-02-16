@@ -29,13 +29,9 @@ def repack_chunks(chunks: list, *, strategy: str) -> list:
 def apply_repack_strategy(
     chunks: list,
     *,
-    fast_mode: bool,
     repack_strategy: str,
 ) -> list:
     """
-    Apply configured re-packing unless fast mode explicitly opts out.
+    Apply configured re-packing strategy.
     """
-    if fast_mode:
-        return chunks
     return repack_chunks(chunks, strategy=repack_strategy)
-

@@ -2,7 +2,11 @@ import unittest
 from datetime import datetime
 from types import SimpleNamespace
 
-from backend.app.main import _align_query_for_retrieval, _build_normal_mode_query_expansions
+from backend.app.chat_pipeline import (
+    _decide_language_alignment,
+    _align_query_for_retrieval,
+    _build_normal_mode_query_expansions,
+)
 from backend.app.openrouter_client import OpenRouterError
 from backend.app.retrieval.evaluation import RetrievalMetrics
 
@@ -41,6 +45,21 @@ class _FailingTranslateOpenRouter(_FakeOpenRouter):
 
 
 class TestMainRetrievalHelpers(unittest.IsolatedAsyncioTestCase):
+    async def test_decide_language_alignment_skips_same_language(self) -> None:
+        settings = SimpleNamespace(
+            fast_mode_language_alignment=False,
+        )
+
+        should_align, reason = _decide_language_alignment(
+            settings=settings,
+            user_query="What is this about?",
+            doc_language="en",
+            fast_mode=False,
+        )
+
+        self.assertFalse(should_align)
+        self.assertEqual(reason, "already_aligned")
+
     async def test_align_query_fail_open(self) -> None:
         session = _FakeSession()
         router = _FailingTranslateOpenRouter()
@@ -57,6 +76,7 @@ class TestMainRetrievalHelpers(unittest.IsolatedAsyncioTestCase):
             user_query="hello",
             doc_language="en",
             should_align=True,
+            skip_reason="enabled",
             metrics=metrics,
         )
 

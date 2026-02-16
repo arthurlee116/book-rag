@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Literal, Optional
-from .evaluation import RetrievalMetrics
+from typing import Any, Literal, Optional
 
 import numpy as np
 
+from .evaluation import RetrievalMetrics
 from ..models.chunk import ChunkModel
 
 
@@ -27,17 +27,45 @@ else:
     _JIEBA_IMPORT_ERROR = None
 
 try:
-    import spacy  # type: ignore
+    import bm25s  # type: ignore
 except Exception as e:  # noqa: BLE001
-    spacy = None  # type: ignore[assignment]
-    _SPACY_IMPORT_ERROR = e
+    bm25s = None  # type: ignore[assignment]
+    _BM25S_IMPORT_ERROR = e
 else:
-    _SPACY_IMPORT_ERROR = None
-
-from rank_bm25 import BM25Okapi  # noqa: E402
+    _BM25S_IMPORT_ERROR = None
 
 
 Language = Literal["en", "zh"]
+
+_EN_TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
+# Compact stopword list for lexical BM25 English path.
+_EN_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "in",
+    "into",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "that",
+    "the",
+    "their",
+    "this",
+    "to",
+    "was",
+    "were",
+    "with",
+}
 
 
 def detect_dominant_language(text: str) -> Language:
@@ -92,26 +120,16 @@ class HybridRetriever:
         self._chunks: list[ChunkModel] = []
         self._doc_embeddings: np.ndarray | None = None
         self._faiss_index = None
-        self._bm25: BM25Okapi | None = None
+        self._bm25 = None
+        self._bm25_doc_ids: list[int] = []
         self._doc_language: Language | None = None
         self._mrl_doc_embeddings_cache: dict[int, np.ndarray] = {}
+        self._mrl_faiss_index_cache: dict[int, Any] = {}
         self._chunk_id_to_index: dict[str, int] = {}
-
-        self._spacy_nlp = None
 
     @property
     def doc_language(self) -> Language | None:
         return self._doc_language
-
-    def _ensure_spacy(self) -> None:
-        if self._spacy_nlp is not None:
-            return
-        if spacy is None:
-            raise RuntimeError(
-                f"spacy is required for English tokenization. Import error: {_SPACY_IMPORT_ERROR}"
-            )
-        # Avoid requiring a downloaded model; blank pipeline is enough for tokenization.
-        self._spacy_nlp = spacy.blank("en")
 
     def _tokenize(self, text: str, *, language: Language) -> list[str]:
         text = text.strip()
@@ -126,17 +144,12 @@ class HybridRetriever:
             tokens = [t.strip() for t in jieba.lcut(text) if t.strip()]
             return tokens
 
-        self._ensure_spacy()
-        assert self._spacy_nlp is not None
-        doc = self._spacy_nlp(text)
+        # Lightweight English tokenizer for BM25 hot path.
         tokens: list[str] = []
-        for t in doc:
-            if t.is_space or t.is_punct:
+        for token in _EN_TOKEN_RE.findall(text.lower()):
+            if token in _EN_STOPWORDS:
                 continue
-            tt = t.text.lower().strip()
-            if not tt:
-                continue
-            tokens.append(tt)
+            tokens.append(token)
         return tokens
 
     def build(
@@ -155,6 +168,10 @@ class HybridRetriever:
         if faiss is None:
             raise RuntimeError(
                 f"faiss-cpu is required for vector search. Import error: {_FAISS_IMPORT_ERROR}"
+            )
+        if bm25s is None:
+            raise RuntimeError(
+                f"bm25s is required for lexical search. Import error: {_BM25S_IMPORT_ERROR}"
             )
         if len(chunks) == 0:
             raise ValueError("chunks must be non-empty")
@@ -178,18 +195,21 @@ class HybridRetriever:
         # Vector index (cosine via normalized inner product).
         doc_embeddings = _l2_normalize(embeddings)
         index = faiss.IndexFlatIP(self.embedding_dim)
-        index.add(doc_embeddings)  # type: ignore
+        index.add(doc_embeddings)  # type: ignore[arg-type]
 
         # BM25 index.
         tokenized_corpus = [
             self._tokenize(c.content, language=self._doc_language) for c in chunks
         ]
-        bm25 = BM25Okapi(tokenized_corpus)
+        bm25 = bm25s.BM25()
+        bm25.index(tokenized_corpus, show_progress=False)
 
         self._doc_embeddings = doc_embeddings
         self._faiss_index = index
         self._bm25 = bm25
+        self._bm25_doc_ids = list(range(len(chunks)))
         self._mrl_doc_embeddings_cache = {}
+        self._mrl_faiss_index_cache = {}
 
     def _get_mrl_doc_embeddings(self, search_dim: int) -> np.ndarray:
         cached = self._mrl_doc_embeddings_cache.get(search_dim)
@@ -200,6 +220,20 @@ class HybridRetriever:
         self._mrl_doc_embeddings_cache[search_dim] = truncated
         return truncated
 
+    def _get_mrl_faiss_index(self, search_dim: int):
+        cached = self._mrl_faiss_index_cache.get(search_dim)
+        if cached is not None:
+            return cached
+        if faiss is None:
+            raise RuntimeError(
+                f"faiss-cpu is required for vector search. Import error: {_FAISS_IMPORT_ERROR}"
+            )
+        doc_emb = self._get_mrl_doc_embeddings(search_dim)
+        index = faiss.IndexFlatIP(search_dim)
+        index.add(doc_emb)  # type: ignore[arg-type]
+        self._mrl_faiss_index_cache[search_dim] = index
+        return index
+
     def search(
         self,
         *,
@@ -208,14 +242,17 @@ class HybridRetriever:
         expanded_query: str | None = None,
         top_k: int = 5,
         search_dim: int | None = None,
+        candidate_k_override: int | None = None,
+        bm25_enabled: bool = True,
         metrics: Optional["RetrievalMetrics"] = None,
     ) -> list[ScoredChunk]:
         """
         Search for relevant chunks.
-        
+
         Args:
-            search_dim: If specified, use MRL (Matryoshka) truncation - only use first N dimensions
-                       for vector search. This speeds up search with minimal accuracy loss.
+            search_dim: If specified, use MRL truncation (first N dims) for vector search.
+            candidate_k_override: Per-request candidate pool override.
+            bm25_enabled: Disable BM25 scoring when False (for dense-only expansions like HyDE).
         """
         if top_k < 1:
             raise ValueError("top_k must be >= 1")
@@ -229,38 +266,31 @@ class HybridRetriever:
             raise ValueError(
                 f"query_embedding dim mismatch: expected {self.embedding_dim}, got {query_embedding.shape[1]}"
             )
-        
-        # MRL: truncate to search_dim if specified
-        use_mrl = search_dim is not None and 0 < search_dim < self.embedding_dim
+
+        # MRL: truncate to search_dim if specified.
+        use_mrl = search_dim is not None and 0 < int(search_dim) < self.embedding_dim
         if use_mrl:
-            query_emb_search = _l2_normalize(query_embedding[:, :search_dim])
-            doc_emb_search = self._get_mrl_doc_embeddings(int(search_dim))
+            search_dim_int = int(search_dim)
+            query_emb_search = _l2_normalize(query_embedding[:, :search_dim_int])
+            doc_emb_search = self._get_mrl_doc_embeddings(search_dim_int)
+            vec_index = self._get_mrl_faiss_index(search_dim_int)
         else:
             query_emb_search = _l2_normalize(query_embedding)
             doc_emb_search = self._doc_embeddings  # already normalized
+            vec_index = self._faiss_index
 
-        # Phase A: Vector candidates (direct cosine computation for MRL, or FAISS for full dim)
+        # Phase A: Vector candidates.
         n_docs = len(self._chunks)
-        vec_fetch_k = min(max(top_k, self.candidate_k), n_docs)
-        
-        # Pre-compute variable to hold all MRL scores if available
-        all_scores_mrl = None
+        effective_candidate_k = (
+            max(1, int(candidate_k_override))
+            if candidate_k_override is not None
+            else self.candidate_k
+        )
+        vec_fetch_k = min(max(top_k, effective_candidate_k), n_docs)
 
-        if use_mrl:
-            # Direct computation for MRL (no pre-built index for truncated dims)
-            scores = (query_emb_search @ doc_emb_search.T).flatten()
-            all_scores_mrl = scores
-            if vec_fetch_k == n_docs:
-                vec_ids_arr = np.argsort(-scores)
-            else:
-                vec_ids_arr = np.argpartition(-scores, vec_fetch_k - 1)[:vec_fetch_k]
-                vec_ids_arr = vec_ids_arr[np.argsort(-scores[vec_ids_arr])]
-            vec_ids_list = vec_ids_arr.tolist()
-            vec_scores_flat = scores[vec_ids_arr]
-        else:
-            vec_scores_raw, vec_ids = self._faiss_index.search(query_emb_search, vec_fetch_k)
-            vec_ids_list = [int(i) for i in vec_ids[0] if int(i) >= 0]
-            vec_scores_flat = vec_scores_raw[0][: len(vec_ids_list)]
+        vec_scores_raw, vec_ids = vec_index.search(query_emb_search, vec_fetch_k)
+        vec_ids_list = [int(i) for i in vec_ids[0] if int(i) >= 0]
+        vec_scores_flat = vec_scores_raw[0][: len(vec_ids_list)]
 
         # Convert cosine [-1, 1] -> [0, 1] (spec expects 0..1).
         vec_scores_map: dict[int, float] = {}
@@ -269,67 +299,72 @@ class HybridRetriever:
             vec_scores_map[idx] = float(np.clip((cos + 1.0) * 0.5, 0.0, 1.0))
 
         # Phase B: BM25 candidates.
-        bm25_query = (expanded_query or query).strip()
-        query_tokens = self._tokenize(bm25_query, language=self._doc_language)
-        bm25_scores = np.asarray(self._bm25.get_scores(query_tokens), dtype=np.float32)
+        if bm25_enabled:
+            bm25_query = (expanded_query or query).strip()
+            query_tokens = self._tokenize(bm25_query, language=self._doc_language)
+            bm25_fetch_k = min(max(top_k, effective_candidate_k), n_docs)
+            if query_tokens:
+                bm25_ids_arr, bm25_scores_arr = self._bm25.retrieve(
+                    [query_tokens],
+                    corpus=self._bm25_doc_ids,
+                    k=bm25_fetch_k,
+                    sorted=True,
+                    show_progress=False,
+                    return_as="tuple",
+                )
+                bm25_top_idx = np.asarray(bm25_ids_arr[0], dtype=np.int32)
+                bm25_top_scores = np.asarray(bm25_scores_arr[0], dtype=np.float32)
+            else:
+                bm25_top_idx = np.empty((0,), dtype=np.int32)
+                bm25_top_scores = np.empty((0,), dtype=np.float32)
 
-        bm25_fetch_k = min(max(top_k, self.candidate_k), n_docs)
-        if bm25_fetch_k == n_docs:
-            bm25_top_idx = np.argsort(-bm25_scores)
+            bm25_min = float(np.min(bm25_top_scores)) if bm25_top_scores.size else 0.0
+            bm25_max = float(np.max(bm25_top_scores)) if bm25_top_scores.size else 0.0
+
+            def norm_bm25(raw: float) -> float:
+                if bm25_max <= 0.0:
+                    return 0.0
+                if abs(bm25_max - bm25_min) < 1e-12:
+                    return 1.0
+                return float((raw - bm25_min) / (bm25_max - bm25_min))
+
+            bm25_norm_map: dict[int, float] = {
+                int(i): norm_bm25(float(s))
+                for i, s in zip(bm25_top_idx.tolist(), bm25_top_scores.tolist())
+            }
+
+            if metrics:
+                metrics.add_step(
+                    "bm25_search",
+                    data={
+                        "topk_indices": bm25_top_idx.tolist()[:10],
+                        "raw_scores": bm25_top_scores.tolist()[:10],
+                        "norm_range": (bm25_min, bm25_max),
+                    },
+                )
         else:
-            bm25_top_idx = np.argpartition(-bm25_scores, bm25_fetch_k - 1)[:bm25_fetch_k]
-            bm25_top_idx = bm25_top_idx[np.argsort(-bm25_scores[bm25_top_idx])]
-
-        bm25_top_scores = bm25_scores[bm25_top_idx]
-        bm25_min = float(np.min(bm25_top_scores)) if bm25_top_scores.size else 0.0
-        bm25_max = float(np.max(bm25_top_scores)) if bm25_top_scores.size else 0.0
-
-        def norm_bm25(raw: float) -> float:
-            if bm25_max <= 0.0:
-                return 0.0
-            if abs(bm25_max - bm25_min) < 1e-12:
-                return 1.0
-            return float((raw - bm25_min) / (bm25_max - bm25_min))
-
-        bm25_norm_map: dict[int, float] = {
-            int(i): norm_bm25(float(s))
-            for i, s in zip(bm25_top_idx, bm25_top_scores)
-        }
-
-        if metrics:
-            metrics.add_step("bm25_search", data={
-                "topk_indices": bm25_top_idx.tolist()[:10],
-                "raw_scores": bm25_top_scores.tolist()[:10],
-                "norm_range": (bm25_min, bm25_max)
-            })
+            bm25_top_idx = np.empty((0,), dtype=np.int32)
+            bm25_norm_map = {}
+            if metrics:
+                metrics.add_step("bm25_search", skipped=True, reason="vector_only")
 
         # Phase C: Candidate union and fusion.
         candidate_ids = set(vec_ids_list) | set(int(i) for i in bm25_top_idx.tolist())
 
-        # Compute vector scores for candidates missing from the vector search top-k
+        # Compute vector scores for candidates missing from vector top-k.
         missing_indices = [idx for idx in candidate_ids if idx not in vec_scores_map]
         if missing_indices:
-            if all_scores_mrl is not None:
-                # Optimized MRL: O(1) lookup since we computed all scores
-                for idx in missing_indices:
-                    cos = float(all_scores_mrl[idx])
-                    vec_scores_map[idx] = float(np.clip((cos + 1.0) * 0.5, 0.0, 1.0))
-            else:
-                # Optimized Vectorization: Compute all missing scores in one batch (M, D) @ (1, D).T
-                # instead of iterating with np.dot one by one.
-                missing_vecs = self._doc_embeddings[missing_indices]
-                # (M, Dim) @ (1, Dim).T -> (M, 1)
-                missing_scores = missing_vecs @ query_emb_search.T
-                missing_scores_flat = missing_scores.reshape(-1)
+            missing_vecs = doc_emb_search[missing_indices]
+            missing_scores = missing_vecs @ query_emb_search.T
+            missing_scores_flat = missing_scores.reshape(-1)
 
-                for idx, raw_score in zip(missing_indices, missing_scores_flat):
-                    cos = float(raw_score)
-                    vec_scores_map[idx] = float(np.clip((cos + 1.0) * 0.5, 0.0, 1.0))
+            for idx, raw_score in zip(missing_indices, missing_scores_flat):
+                cos = float(raw_score)
+                vec_scores_map[idx] = float(np.clip((cos + 1.0) * 0.5, 0.0, 1.0))
 
         scored: list[ScoredChunk] = []
         for idx in candidate_ids:
-            # All candidates should now be in vec_scores_map
-            vector_score = vec_scores_map.get(idx, 0.0)  # fallback 0.0 just in case
+            vector_score = vec_scores_map.get(idx, 0.0)
             bm25_norm = bm25_norm_map.get(idx, 0.0)
             final = (self.vector_weight * vector_score) + (self.bm25_weight * bm25_norm)
             scored.append(
@@ -343,15 +378,19 @@ class HybridRetriever:
 
         scored.sort(key=lambda x: x.final_score, reverse=True)
         if metrics:
-            metrics.add_step("hybrid_fusion", data={
-                "topk_chunks": [
-                    {
-                        "chunk_id": s.chunk.id,
-                        "chunk_idx": self._chunk_id_to_index.get(s.chunk.id, -1),
-                        "final_score": s.final_score,
-                        "vector_score": s.vector_score,
-                        "bm25_norm": s.bm25_score_norm
-                    } for s in scored[:top_k]
-                ]
-            })
+            metrics.add_step(
+                "hybrid_fusion",
+                data={
+                    "topk_chunks": [
+                        {
+                            "chunk_id": s.chunk.id,
+                            "chunk_idx": self._chunk_id_to_index.get(s.chunk.id, -1),
+                            "final_score": s.final_score,
+                            "vector_score": s.vector_score,
+                            "bm25_norm": s.bm25_score_norm,
+                        }
+                        for s in scored[:top_k]
+                    ]
+                },
+            )
         return scored[: min(top_k, len(scored))]

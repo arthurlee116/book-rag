@@ -19,7 +19,7 @@ lxml
 # NLP + search
 jieba
 spacy
-rank-bm25
+bm25s
 
 # Vector search
 numpy
