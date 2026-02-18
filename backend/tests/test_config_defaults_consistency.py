@@ -43,6 +43,14 @@ class TestConfigDefaultsConsistency(unittest.TestCase):
             static_defaults.hyde_drift_sim_threshold,
         )
         self.assertEqual(loaded.retrieval_parallelism, static_defaults.retrieval_parallelism)
+        self.assertEqual(
+            loaded.context_include_neighbors, static_defaults.context_include_neighbors
+        )
+        self.assertEqual(
+            loaded.fast_mode_include_neighbors, static_defaults.fast_mode_include_neighbors
+        )
+        self.assertEqual(loaded.chat_history_max_turns, static_defaults.chat_history_max_turns)
+        self.assertEqual(loaded.chat_history_max_chars, static_defaults.chat_history_max_chars)
 
 
 if __name__ == "__main__":

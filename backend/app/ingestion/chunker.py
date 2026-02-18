@@ -29,12 +29,31 @@ def estimate_tokens(text: str) -> int:
     """
     Lightweight token estimate (no tokenizer dependency).
     - CJK chars count as ~1 token each
-    - Latin words/numbers count as ~1 token each
+    - Latin words (whitespace-separated runs of non-CJK) count as ~1 token each
+    Uses character iteration instead of re.findall to avoid allocating
+    temporary string lists on every call.
     """
-
-    cjk = len(re.findall(r"[\u4e00-\u9fff]", text))
-    latin = len(re.findall(r"[A-Za-z0-9]+", text))
-    return cjk + latin
+    if not text:
+        return 0
+    cjk = 0
+    latin_words = 0
+    in_word = False
+    for c in text:
+        if '\u4e00' <= c <= '\u9fff':
+            cjk += 1
+            if in_word:
+                latin_words += 1
+                in_word = False
+        elif c.isalnum():
+            if not in_word:
+                in_word = True
+        else:
+            if in_word:
+                latin_words += 1
+                in_word = False
+    if in_word:
+        latin_words += 1
+    return cjk + latin_words
 
 
 class Chunker:

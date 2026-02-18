@@ -98,7 +98,6 @@ async def ingest_file(
         async with semaphore:
             start = b_idx * batch_size
             end = min(len(chunks), (b_idx + 1) * batch_size)
-            assert session is not None
             await session.log(
                 f"[LOG] Embedding batch {b_idx + 1}/{total_batches} ({start}-{end})..."
             )
@@ -113,6 +112,11 @@ async def ingest_file(
 
             return b_idx, start, embs, None
 
+    # NOTE on concurrency safety: asyncio.as_completed yields results out of
+    # order, but writes to embeddings_matrix[start:end] are safe because each
+    # batch owns a non-overlapping slice.  The shared `detected_embedding_dim`
+    # and `embeddings_matrix` variables are only mutated inside `await` points
+    # in the single-threaded asyncio event loop, so no lock is needed.
     tasks = [asyncio.create_task(_process_batch(b_idx)) for b_idx in range(total_batches)]
     try:
         for completed in asyncio.as_completed(tasks):
@@ -192,6 +196,14 @@ async def ingest_file(
             session.ingest_error = str(e)
         await session.log(f"[LOG] ERROR building indexes: {e}")
         return
+
+    fast_dim = int(settings.embedding_dim_fast_mode)
+    if 0 < fast_dim < detected_embedding_dim:
+        await session.log(f"[LOG] Pre-warming fast-mode MRL index (dim={fast_dim})...")
+        try:
+            await loop.run_in_executor(None, lambda: retriever.warmup_mrl(fast_dim))
+        except Exception as e:  # noqa: BLE001
+            await session.log(f"[LOG] WARNING: MRL pre-warm failed ({e}); continuing.")
 
     async with session.lock:
         session.chunks = chunks

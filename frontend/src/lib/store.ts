@@ -37,6 +37,8 @@ type ErrState = {
 
   evaluation: Evaluation | null;
   fetchEvaluation: () => Promise<void>;
+
+  clearChat: () => Promise<void>;
 };
 
 // Use /backend proxy path in Docker, or direct URL for local dev
@@ -101,5 +103,17 @@ export const useErrStore = create<ErrState>((set, get) => ({
     } catch (e) {
       console.error("Failed to fetch evaluation", e);
     }
+  },
+
+  clearChat: async () => {
+    const state = get();
+    if (!state.sessionId) return;
+    const resp = await fetch(`${state.backendUrl}/clear/${state.sessionId}`, {
+      method: "POST",
+    });
+    if (!resp.ok) {
+      throw new Error(`Clear failed (${resp.status})`);
+    }
+    set({ messages: [], evaluation: null, logs: [] });
   },
 }));

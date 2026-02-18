@@ -34,6 +34,10 @@ class Settings(BaseModel):
 
     # Re-packing strategy: "forward" (default order), "reverse" (most relevant at end)
     repack_strategy: str = "reverse"
+    context_include_neighbors: bool = True
+    fast_mode_include_neighbors: bool = False
+    chat_history_max_turns: int = 12
+    chat_history_max_chars: int = 6000
 
     # Query embedding aggregation decay factor (0.7 means each subsequent embedding has 0.7x weight)
     embedding_aggregation_decay: float = 0.7
@@ -193,6 +197,10 @@ def load_settings() -> Settings:
         semantic_chunking_threshold=getenv_float("ERR_SEMANTIC_CHUNKING_THRESHOLD", 0.5),
         semantic_chunking_max_sentences=getenv_int("ERR_SEMANTIC_CHUNKING_MAX_SENTENCES", 2000),
         repack_strategy=os.getenv("ERR_REPACK_STRATEGY", "reverse"),
+        context_include_neighbors=getenv_bool("ERR_CONTEXT_INCLUDE_NEIGHBORS", True),
+        fast_mode_include_neighbors=getenv_bool("ERR_FAST_MODE_INCLUDE_NEIGHBORS", False),
+        chat_history_max_turns=getenv_int("ERR_CHAT_HISTORY_MAX_TURNS", 12),
+        chat_history_max_chars=getenv_int("ERR_CHAT_HISTORY_MAX_CHARS", 6000),
         embedding_aggregation_decay=getenv_float("ERR_EMBEDDING_AGGREGATION_DECAY", 0.7),
         query_fusion_enabled=getenv_bool("ERR_QUERY_FUSION_ENABLED", True),
         query_variants_count=getenv_int("ERR_QUERY_VARIANTS_COUNT", 6),

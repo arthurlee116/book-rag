@@ -123,6 +123,17 @@ async def get_evaluation(
     return session.latest_evaluation
 
 
+@router.post("/clear/{session_id}")
+async def clear_chat(
+    session_id: str,
+    settings: Settings = Depends(get_settings),
+) -> dict[str, str]:
+    session = get_session(session_id=session_id, ttl_seconds=settings.session_ttl_seconds)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Unknown session")
+    await session.clear_chat_data()
+    return {"status": "cleared"}
+
 def _rewrite_local_citations_to_global(
     *, answer: str, local_citations: list[dict], global_map: dict[str, int]
 ) -> str:

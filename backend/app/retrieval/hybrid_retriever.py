@@ -37,7 +37,7 @@ else:
 
 Language = Literal["en", "zh"]
 
-_EN_TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
+_EN_TOKEN_RE = re.compile(r"[A-Za-z]+(?:['’][A-Za-z]+)?|\d+")
 # Compact stopword list for lexical BM25 English path.
 _EN_STOPWORDS = {
     "a",
@@ -67,12 +67,74 @@ _EN_STOPWORDS = {
     "with",
 }
 
+_EN_IRREGULAR_SINGULARS = {
+    "indices": "index",
+    "matrices": "matrix",
+    "vertices": "vertex",
+}
+
 
 def detect_dominant_language(text: str) -> Language:
-    # Very small heuristic: if there is meaningful CJK presence, treat as zh.
+    # Query-oriented heuristic:
+    # - robust for short Chinese queries ("你好", "第3章讲了什么")
+    # - avoids flipping to zh on tiny CJK noise inside English text
     cjk = len(re.findall(r"[\u4e00-\u9fff]", text))
     latin = len(re.findall(r"[A-Za-z]", text))
-    return "zh" if cjk > max(10, latin) else "en"
+    if cjk == 0:
+        return "en"
+    if latin == 0:
+        return "zh"
+    # Rule 3: short queries with meaningful CJK presence.
+    if cjk >= 2 and cjk >= latin:
+        return "zh"
+    # Rule 4: longer mixed text where CJK is minority but still significant.
+    if cjk >= 4 and (cjk / float(cjk + latin)) >= 0.2:
+        return "zh"
+    return "en"
+
+
+def _normalize_en_token(token: str) -> str:
+    """
+    Lightweight rule-based normalization for BM25 lexical matching.
+    Known limitation: this intentionally stays conservative and will not
+    perfectly stem all irregular English forms.
+    """
+    t = token.lower().replace("’", "'").strip()
+    if not t:
+        return ""
+
+    # Normalize possessives.
+    if t.endswith("'s"):
+        t = t[:-2]
+    t = t.strip("'")
+    if not t:
+        return ""
+
+    # Keep numbers as-is for lexical retrieval.
+    if t.isdigit():
+        return t
+    if t in _EN_IRREGULAR_SINGULARS:
+        return _EN_IRREGULAR_SINGULARS[t]
+
+    # Lightweight stemming/lemmatization heuristics.
+    if len(t) > 4 and t.endswith("ying"):
+        t = f"{t[:-4]}ie"
+    elif len(t) > 3 and t.endswith("ied"):
+        t = f"{t[:-3]}y" if len(t) > 4 else t[:-1]
+    elif len(t) > 4 and t.endswith("ies"):
+        t = f"{t[:-3]}y"
+    elif len(t) > 5 and t.endswith("ing"):
+        t = t[:-3]
+    elif len(t) > 4 and t.endswith("ed"):
+        t = t[:-2]
+    elif len(t) > 4 and t.endswith(("ches", "shes", "sses", "xes", "zes", "oes")):
+        t = t[:-2]
+    elif len(t) > 3 and t.endswith("s") and not t.endswith(("ss", "us", "is")):
+        t = t[:-1]
+
+    if len(t) <= 1:
+        return ""
+    return t
 
 
 def _l2_normalize(vectors: np.ndarray, *, eps: float = 1e-12) -> np.ndarray:
@@ -146,8 +208,9 @@ class HybridRetriever:
 
         # Lightweight English tokenizer for BM25 hot path.
         tokens: list[str] = []
-        for token in _EN_TOKEN_RE.findall(text.lower()):
-            if token in _EN_STOPWORDS:
+        for raw in _EN_TOKEN_RE.findall(text):
+            token = _normalize_en_token(raw)
+            if not token or token in _EN_STOPWORDS:
                 continue
             tokens.append(token)
         return tokens
@@ -210,6 +273,20 @@ class HybridRetriever:
         self._bm25_doc_ids = list(range(len(chunks)))
         self._mrl_doc_embeddings_cache = {}
         self._mrl_faiss_index_cache = {}
+
+    def warmup_mrl(self, search_dim: int | None) -> None:
+        """
+        Pre-build MRL caches/index for a common search dimension to avoid
+        first-query latency spikes in fast mode.
+        """
+        if self._faiss_index is None or self._doc_embeddings is None:
+            raise RuntimeError("HybridRetriever is not built. Call build() first.")
+        if search_dim is None:
+            return
+        dim = int(search_dim)
+        if dim <= 0 or dim >= self.embedding_dim:
+            return
+        self._get_mrl_faiss_index(dim)
 
     def _get_mrl_doc_embeddings(self, search_dim: int) -> np.ndarray:
         cached = self._mrl_doc_embeddings_cache.get(search_dim)

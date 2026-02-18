@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
-import { Button, Input, Select, Typography, Alert, Space } from "antd";
-import { SendOutlined, DownloadOutlined, ThunderboltOutlined, MessageOutlined } from "@ant-design/icons";
+import { Button, Input, Select, Typography, Alert, Space, Modal } from "antd";
+import { SendOutlined, DownloadOutlined, ThunderboltOutlined, MessageOutlined, ClearOutlined } from "@ant-design/icons";
 import { useErrStore } from "@/lib/store";
 import type { ChunkModel } from "@/lib/types";
 
@@ -63,6 +63,7 @@ export function ChatPanel() {
   const openRightPanel = useErrStore((s) => s.openRightPanel);
   const setActiveChunk = useErrStore((s) => s.setActiveChunk);
   const isDesktop = useErrStore((s) => s.isDesktop);
+  const clearChat = useErrStore((s) => s.clearChat);
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -146,6 +147,22 @@ export function ChatPanel() {
     }
   };
 
+  const onClear = () => {
+    Modal.confirm({
+      title: "清除聊天记录",
+      content: "确定要清除聊天记录吗？检索数据将保留。",
+      okText: "确定",
+      cancelText: "取消",
+      onOk: async () => {
+        try {
+          await clearChat();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "清除失败");
+        }
+      },
+    });
+  };
+
   const onCitationClick = (msgIndex: number, n: number) => {
     const msg = messages[msgIndex];
     const chunk = msg.citations?.[n - 1] ?? null;
@@ -217,6 +234,20 @@ export function ChatPanel() {
               { value: 10, label: "Top 10" },
             ]}
           />
+          <Button
+            size="small"
+            icon={<ClearOutlined />}
+            onClick={onClear}
+            disabled={!sessionId || busy || uploadStatus !== "ready"}
+            style={{
+              background: "#14141a",
+              borderColor: "#1f2937",
+              color: "#9ca3af",
+              height: "32px",
+            }}
+          >
+            Clear
+          </Button>
           <Button
             size="small"
             icon={<DownloadOutlined />}

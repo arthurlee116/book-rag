@@ -56,6 +56,7 @@ def _weighted_embedding_mean(embeddings, *, decay: float = 0.7):
     """
     Weighted average of embeddings. First embedding gets weight 1.0,
     subsequent ones decay exponentially (decay^i).
+    Result is L2-normalized so downstream similarity can use plain dot product.
     """
     embs = np.asarray(embeddings, dtype=np.float32)
     if embs.ndim != 2 or embs.shape[0] == 0:
@@ -63,7 +64,11 @@ def _weighted_embedding_mean(embeddings, *, decay: float = 0.7):
     n = embs.shape[0]
     weights = np.array([decay**i for i in range(n)], dtype=np.float32)
     weights /= weights.sum()
-    return np.average(embs, axis=0, weights=weights).astype(np.float32)
+    avg = np.average(embs, axis=0, weights=weights).astype(np.float32)
+    norm = float(np.linalg.norm(avg))
+    if norm > 1e-12:
+        avg /= norm
+    return avg
 
 
 def _build_embedding_query_inputs(
@@ -106,6 +111,21 @@ def _trim_text(text: str, *, max_chars: int) -> str:
     if len(t) <= max_chars:
         return t
     return t[: max_chars - 1].rstrip() + "…"
+
+
+def _trim_history_to_char_window(history_text: str, *, max_chars: int) -> tuple[str, bool]:
+    """
+    Keep the last max_chars from history_text, but prefer starting from
+    a line boundary to avoid slicing in the middle of a turn.
+    """
+    if max_chars <= 0 or len(history_text) <= max_chars:
+        return history_text, False
+
+    truncated = history_text[-max_chars:]
+    newline_pos = truncated.find("\n")
+    if newline_pos > 0:
+        truncated = truncated[newline_pos + 1 :]
+    return truncated, True
 
 
 def _build_context_blocks(*, chunks: list, include_neighbors: bool = True) -> list[str]:
@@ -381,7 +401,12 @@ async def run_chat(
         embed_inputs: list[str] = []
         slices: dict[str, slice] = {}
         for q in query_texts:
-            inputs_for_q = _build_embedding_query_inputs(settings=settings, queries=[q])
+            # Normal mode: instruction-wrapped embeddings are sufficient for
+            # instruction-aware models like Qwen3-Embedding; skip raw duplicates
+            # to halve the embedding API token cost.
+            inputs_for_q = _build_embedding_query_inputs(
+                settings=settings, queries=[q], include_raw_override=False,
+            )
             if not inputs_for_q:
                 continue
             start = len(embed_inputs)
@@ -407,12 +432,13 @@ async def run_chat(
             raise HTTPException(status_code=500, detail="Unexpected embedding response shape")
 
         def cosine(a: np.ndarray, b: np.ndarray) -> float:
-            aa = np.asarray(a, dtype=np.float32).reshape(-1)
-            bb = np.asarray(b, dtype=np.float32).reshape(-1)
-            denom = float(np.linalg.norm(aa) * np.linalg.norm(bb))
-            if denom < 1e-12:
-                return 0.0
-            return float(np.dot(aa, bb) / denom)
+            # INVARIANT: vectors come from _weighted_embedding_mean (L2-normalized),
+            # so dot product == cosine similarity.
+            sim = np.dot(
+                np.asarray(a, dtype=np.float32).reshape(-1),
+                np.asarray(b, dtype=np.float32).reshape(-1),
+            )
+            return float(np.clip(sim, -1.0, 1.0))
 
         query_vecs: dict[str, np.ndarray] = {}
         aggregation_decay = float(settings.embedding_aggregation_decay)
@@ -474,7 +500,11 @@ async def run_chat(
             v = query_vecs.get(q)
             if v is None:
                 continue
-            retrieval_jobs.append((q, v, q, True))
+            # Only base_query runs BM25; variants share highly overlapping
+            # keywords so repeated BM25 passes yield diminishing returns
+            # while adding tokenization overhead (especially jieba for zh).
+            is_base = (q == base_query)
+            retrieval_jobs.append((q, v, q if is_base else None, is_base))
 
         if use_hyde and hyde_vec is not None:
             # HyDE is retrieval-only dense expansion. Avoid duplicate BM25 pass.
@@ -631,7 +661,15 @@ async def run_chat(
         )
     metrics.add_step("final_context", data={"chunks": final_chunks_data})
 
-    context_blocks = _build_context_blocks(chunks=retrieved_chunks, include_neighbors=True)
+    include_neighbors = (
+        bool(settings.fast_mode_include_neighbors)
+        if req.fast_mode
+        else bool(settings.context_include_neighbors)
+    )
+    context_blocks = _build_context_blocks(
+        chunks=retrieved_chunks,
+        include_neighbors=include_neighbors,
+    )
     context_text = "\n\n".join(context_blocks)
 
     system_prompt = (
@@ -643,8 +681,21 @@ async def run_chat(
         "4) Do not use any outside knowledge. Do not guess.\n"
     )
 
+    history_truncated = False
     async with session.lock:
-        history_text = "\n".join([f"{t.role}: {t.content}" for t in session.chat_history])
+        max_turns = max(0, int(settings.chat_history_max_turns))
+        if max_turns == 0:
+            history_turns = []
+        else:
+            history_turns = session.chat_history[-max_turns:]
+        history_text = "\n".join([f"{t.role}: {t.content}" for t in history_turns])
+
+    max_history_chars = max(0, int(settings.chat_history_max_chars))
+    history_text, history_truncated = _trim_history_to_char_window(
+        history_text, max_chars=max_history_chars
+    )
+    if history_truncated:
+        await session.log("[LOG] Chat: trimmed chat history to configured char window.")
 
     prompt_tokens = _estimate_prompt_tokens(
         text_parts=[system_prompt, history_text, context_text, user_query]

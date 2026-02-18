@@ -1,216 +1,344 @@
-<!-- OPENSPEC:START -->
-# OpenSpec Instructions
+# AGENTS.md — ERR (Ephemeral RAG Reader)
 
-These instructions are for AI assistants working in this project.
-
-Always open `@/openspec/AGENTS.md` when the request:
-- Mentions planning or proposals (words like proposal, spec, change, plan)
-- Introduces new capabilities, breaking changes, architecture shifts, or big performance/security work
-- Sounds ambiguous and you need the authoritative spec before coding
-
-Use `@/openspec/AGENTS.md` to learn:
-- How to create and apply change proposals
-- Spec format and conventions
-- Project structure and guidelines
-
-Keep this managed block so 'openspec update' can refresh the instructions.
-
-<!-- OPENSPEC:END -->
-
-# Repository Guidelines
+This file provides essential context for AI coding agents working on the ERR project.
 
 ## Project Overview
 
-ERR (Ephemeral RAG Reader) is a privacy-first document Q&A web app. Users upload a document, the backend parses and chunks it, builds in-memory retrieval indexes (vector + BM25), and the frontend provides a chat UI that answers questions strictly using retrieved passages. "Ephemeral" is intentional: ingestion artifacts and chat state are per-session in memory with TTL cleanup; nothing is written to a database by default.
+**ERR (Ephemeral RAG Reader)** is a privacy-first document Q&A application with state-of-the-art hybrid retrieval. Users upload documents and ask questions with cited answers. All processing happens in-memory with automatic TTL cleanup — no database, no persistence.
 
-## Project Structure & Module Organization
+- **Live URL**: https://bookembed.net
+- **Repository**: Full-stack monorepo with backend (FastAPI) and frontend (React)
+- **Language**: English codebase with bilingual documentation (EN/ZH)
 
-- `backend/`: FastAPI service (Python). Core code lives in `backend/app/`:
-  - `backend/app/main.py`: app lifecycle, CORS, and router mounting.
-  - `backend/app/routes.py`: API route definitions.
-  - `backend/app/ingestion_pipeline.py`: upload ingestion orchestration.
-  - `backend/app/chat_pipeline.py`: chat retrieval/answer orchestration.
-  - `backend/app/config.py`: `Settings` and env loading (supports `ENV_FILE=/path/to/.env`).
-  - `backend/app/openrouter_client.py`: OpenRouter HTTP wrapper for chat + embeddings.
-  - `backend/app/session_store.py`: in-memory sessions, locks, TTL cleanup.
-  - `backend/app/ingestion/`: file parsing and chunking (`file_parser.py`, `chunker.py`).
-  - `backend/app/retrieval/`: hybrid retriever, indexing, and evaluation metrics (`hybrid_retriever.py`, `evaluation.py`).
-  - `backend/app/guardrails.py`: strict answer enforcement (citations / fallback behavior).
-- `frontend/`: Vite + React + Ant Design + TypeScript UI:
-  - `frontend/src/main.tsx`: React entry point with Ant Design ConfigProvider.
-  - `frontend/src/App.tsx`: main application component.
-  - `frontend/src/theme.ts`: Ant Design dark theme token configuration.
-  - `frontend/src/components/`: UI components (UploadPanel, ChatPanel, TerminalWindow, DocumentPanel, EvaluationPanel).
-  - `frontend/src/lib/`: Zustand state (`store.ts`) and TypeScript types (`types.ts`).
-  - `frontend/vite.config.ts`: Vite configuration with API proxy.
+## Architecture
 
-Keep boundaries clear: the frontend talks to the backend over HTTP using `VITE_BACKEND_URL`; do not share runtime code across the boundary.
-
-## Architecture & Request Flow
-
-1. Frontend starts at `http://localhost:3000` and reads `VITE_BACKEND_URL` from `frontend/.env.local`.
-2. A session is identified via an HTTP header (the backend accepts an `X-Session-Id` style header); if missing, a new session is created server-side.
-3. Upload:
-   - The frontend uploads a document to the backend (`POST /upload`).
-   - The backend parses it into text "blocks", then builds sentence-based chunks (target ~512 tokens with overlap; optional semantic splits via sentence embeddings).
-   - The backend calls OpenRouter embeddings in batches and builds in-memory indexes: FAISS for vectors and BM25 for lexical matching.
-   - Ingestion logs are streamed over Server-Sent Events (`GET /api/logs/{session_id}`) to show progress in the UI.
-4. Chat (Normal Mode):
-   - The frontend sends a user question; the backend runs the full retrieval pipeline:
-     1. Language alignment (translate query to document language if needed)
-     2. Multi-query expansion (generate 6 query variants using `chat_model_complex`)
-     3. HyDE (generate hypothetical passage using `chat_model_simple`)
-     4. Hybrid search (FAISS + BM25) per query variant
-     5. RRF fusion (merge rankings with k=60)
-     6. Drift filtering (remove off-topic variants)
-     7. LLM rerank (judge relevance using `chat_model_complex`)
-     8. Re-packing (reorder chunks, default: reverse)
-   - The backend generates the answer using `chat_model_simple` with strict RAG constraints.
-   - The backend post-processes the model output using guardrails to enforce citation behavior.
-5. Chat (Fast Mode):
-   - Uses 1024-dim MRL embeddings instead of 4096
-   - Skips multi-query expansion, HyDE, and LLM rerank
-   - Faster but potentially lower recall
-
-## Build, Test, and Development Commands
-
-From repo root:
-
-- Backend setup: `python -m venv .venv && source .venv/bin/activate && pip install -r backend/requirements.txt`
-- Backend run (dev): `uvicorn backend.app.main:app --reload --port 8000`
-- Backend health check: `curl http://localhost:8000/health`
-- Backend tests (unit): `python -m unittest discover -s backend/tests -p "test_*.py"`
-
-From `frontend/`:
-
-- Install deps: `npm install --legacy-peer-deps`
-- Dev server: `npm run dev` (serves on http://localhost:3000)
-- Lint: `npm run lint`
-- Production build: `npm run build`
-- Preview production build: `npm run preview`
-
-Tip: run backend first, then frontend. If the backend port changes, update `frontend/.env.local`.
-
-## Coding Style & Naming Conventions
-
-- Python:
-  - 4-space indentation, type hints preferred, and predictable error handling for API routes.
-  - Keep imports lightweight at package import time so tooling can run without heavy deps (see `backend/app/models/__init__.py`).
-  - Prefer small, pure helpers for parsing/chunking/retrieval so they're testable without spinning up FastAPI.
-- TypeScript/React:
-  - Keep TypeScript `strict` enabled (`frontend/tsconfig.json`); avoid `any`.
-  - Follow ESLint rules in `frontend/eslint.config.js`.
-  - Use the `@/*` path alias for imports (maps to `src/*`).
-  - Use Ant Design components for UI; customize via `theme.ts` tokens.
-- Naming:
-  - Python: `snake_case` for functions/vars, `PascalCase` for classes.
-  - React: components `PascalCase`, hooks `useThing`, event handlers `onThing`.
-
-## Testing Guidelines
-
-- Backend uses `unittest` (`backend/tests/`) with discovery. Keep tests fast and deterministic.
-- Name tests `test_*.py` and test public helpers (e.g., guardrails, retrieval scoring behavior, token estimation).
-- If a change affects API contracts (request/response shape, headers, status codes), add a unit test and update the frontend caller accordingly.
-
-## Commit & Pull Request Guidelines
-
-- Commits follow Conventional Commits (e.g., `feat: ...`, `fix: ...`). Keep subjects imperative and scoped (example: `feat(ingestion): support .docx headings`).
-- PRs should include:
-  - Summary: what changed and why (1–2 paragraphs).
-  - Testing notes: commands run and manual checks performed.
-  - UI changes: screenshots or a short screen recording.
-  - Configuration changes: note any added/renamed env vars and update `.env.example` files when appropriate.
-
-## Security & Configuration Tips
-
-- Never commit secrets. Use `backend/.env.example` → `backend/.env` and `frontend/.env.example` → `frontend/.env.local`.
-- Backend env highlights (see `backend/.env.example`):
-  - `OPENROUTER_API_KEY`: required for embeddings/chat.
-  - `OPENROUTER_CHAT_MODEL_SIMPLE`: model for simple tasks (translation, HyDE, QA generation). Default: `google/gemini-2.5-flash-lite-preview-09-2025`
-  - `OPENROUTER_CHAT_MODEL_COMPLEX`: model for complex tasks (multi-query expansion, LLM rerank). Default: `google/gemini-2.5-flash-preview-09-2025`
-  - `OPENROUTER_EMBEDDING_MODEL`: embedding model selection. Default: `qwen/qwen3-embedding-8b`
-  - `OPENROUTER_EMBEDDING_DIM`: expected dim (backend can warn on mismatch). Default: `4096`
-  - `ERR_SESSION_TTL_SECONDS`, `ERR_SESSION_CLEANUP_INTERVAL_SECONDS`: in-memory session lifecycle.
-  - `ERR_CHAT_MODEL_CONTEXT_LIMIT_TOKENS`: guardrail against oversized prompts.
-  - `ERR_EMBEDDING_QUERY_*`: instruction templating for retrieval.
-  - `ERR_QUERY_FUSION_ENABLED`, `ERR_HYDE_ENABLED`, `ERR_LLM_RERANK_ENABLED`: retrieval pipeline toggles.
-  - `ERR_REPACK_STRATEGY`: context ordering ("reverse" or "forward").
-  - `ERR_EMBEDDING_DIM_FAST_MODE`: MRL dimension for fast mode (default: 1024).
-- Frontend env highlights (see `frontend/.env.example`):
-  - `VITE_BACKEND_URL`: backend API URL. Default: `http://localhost:8000`
-- **Note:** `OPENROUTER_CHAT_MODEL` and `NEXT_PUBLIC_BACKEND_URL` are deprecated and no longer used.
-- Treat uploaded documents as sensitive:
-  - Keep processing in-memory unless explicitly changing the privacy model.
-  - Be careful when adding logging; avoid writing raw document text or user queries to disk.
-
-## Production Deployment
-
-### Server Info
-- **Domain**: https://bookembed.net
-- **Server**: Tencent Cloud (Hong Kong)
-- **IP**: 43.159.200.246
-- **OS**: Ubuntu 24.04
-- **User**: ubuntu
-
-### Key Files on Server
-- Project: `~/book-rag`
-- Caddy config: `/etc/caddy/Caddyfile`
-- Docker Compose: `docker-compose.prod.yml`
-
-### Caddy Reverse Proxy
-Caddy handles HTTPS (auto Let's Encrypt) and routes:
-- `https://bookembed.net/*` → frontend (localhost:3000)
-- `https://bookembed.net/backend/*` → backend (localhost:8000, with `/backend` prefix stripped)
-
-### Deployment Commands
-```bash
-# SSH to server
-ssh ubuntu@43.159.200.246
-
-# Update and redeploy
-cd ~/book-rag && git pull && sudo docker compose -f docker-compose.prod.yml up -d --build
-
-# View logs
-sudo docker compose -f ~/book-rag/docker-compose.prod.yml logs -f
-
-# Restart services
-sudo docker compose -f ~/book-rag/docker-compose.prod.yml restart
-
-# Check Caddy
-sudo systemctl status caddy
-sudo systemctl restart caddy
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Frontend (Vite + React + Ant Design)          │
+│  ┌────────┐ ┌──────┐ ┌──────┐ ┌────────────┐ ┌────────────────┐ │
+│  │ Upload │ │ Chat │ │ Logs │ │ Evaluation │ │ Citation View  │ │
+│  └───┬────┘ └──┬───┘ └──┬───┘ └─────┬──────┘ └───────┬────────┘ │
+└───────┼─────────────┼─────────────┼─────────────────┼───────────┘
+        │             │             │                 │
+        ▼             ▼             ▼                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Backend (FastAPI)                           │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                    Session Store (In-Memory)                 ││
+│  │  • Chunks + Embeddings    • FAISS Index    • BM25 Index     ││
+│  │  • Chat History           • TTL Cleanup                      ││
+│  └─────────────────────────────────────────────────────────────┘│
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │              Retrieval Pipeline (Hybrid RAG)                ││
+│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌──────────────┐   ││
+│  │  │  HyDE   │→ │ Multi-  │→ │ Hybrid  │→ │ LLM Rerank   │   ││
+│  │  │         │  │ Query   │  │ Search  │  │ (optional)   │   ││
+│  │  └─────────┘  └─────────┘  └─────────┘  └──────────────┘   ││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │   OpenRouter API    │
+                    │  • Qwen3 Embeddings │
+                    │  • Gemini Chat      │
+                    └─────────────────────┘
 ```
 
-### Important Notes
-- The `docker-compose.prod.yml` frontend service should NOT have a `command:` override; use Dockerfile.prod's CMD (`serve -s dist -l 3000`).
-- Frontend build requires `VITE_BACKEND_URL=/backend` in `.env.production` (handled by Dockerfile.prod ARG).
-- Backend `.env` must be copied separately (not in git): `scp backend/.env ubuntu@43.159.200.246:~/book-rag/backend/.env`
+## Technology Stack
 
-### CI/CD Automatic Deployment
+### Backend (`/backend/`)
+- **Framework**: FastAPI (Python 3.12)
+- **Server**: Uvicorn with auto-reload (dev)
+- **Key Libraries**:
+  - `faiss-cpu` — Vector similarity search
+  - `bm25s` — BM25 keyword retrieval
+  - `sentence-transformers` — Local embedding fallback
+  - `spacy`, `jieba` — NLP tokenization
+  - `ebooklib`, `python-docx` — Document parsing
+  - `httpx`, `tenacity` — HTTP client with retries
+  - `sse-starlette` — Server-Sent Events
+- **External API**: OpenRouter (embeddings + chat)
 
-GitHub Actions automatically deploys on every push to `main`:
+### Frontend (`/frontend/`)
+- **Framework**: React 18 + TypeScript 5
+- **Build Tool**: Vite 8
+- **UI Library**: Ant Design 5
+- **State Management**: Zustand 5
+- **Styling**: Less (CSS preprocessor)
+- **Linting**: ESLint 9 + typescript-eslint
 
-**Workflow**: `.github/workflows/deploy.yml`
-- SSH to server using `DEPLOY_SSH_KEY` secret
-- Pull latest code from GitHub
-- Rebuild and restart Docker containers
-- Health check both frontend and backend endpoints
+### DevOps
+- **Containerization**: Docker + Docker Compose
+- **Reverse Proxy**: Caddy (production)
+- **CI/CD**: GitHub Actions (auto-deploy on push to main)
+- **Server**: Tencent Cloud (Hong Kong), Ubuntu 24.04
 
-**GitHub Secrets** (configured via `gh secret set`):
-- `DEPLOY_HOST`: Server IP (43.159.200.246)
-- `DEPLOY_USER`: SSH username (ubuntu)
-- `DEPLOY_SSH_KEY`: Server's `~/.ssh/github_actions_deploy` private key
+## Project Structure
 
-**Server Setup**:
-- Deployment key: `~/.ssh/github_actions_deploy` (ed25519)
-- Public key added to `~/.ssh/authorized_keys`
+```
+book-rag/
+├── backend/
+│   ├── app/
+│   │   ├── main.py                 # FastAPI app entry, lifespan, CORS
+│   │   ├── config.py               # Settings with env loading
+│   │   ├── routes.py               # API endpoints (upload, chat, logs, export)
+│   │   ├── openrouter_client.py    # OpenRouter API wrapper with retries
+│   │   ├── session_store.py        # In-memory session management + TTL
+│   │   ├── chat_pipeline.py        # RAG chat orchestration
+│   │   ├── ingestion_pipeline.py   # Document ingestion workflow
+│   │   ├── guardrails.py           # Citation enforcement
+│   │   ├── repacking.py            # Context re-packing strategies
+│   │   ├── deps.py                 # FastAPI dependencies
+│   │   ├── ingestion/              # Document parsing & chunking
+│   │   │   ├── file_parser.py      # .txt, .md, .docx, .epub, .mobi
+│   │   │   └── chunker.py          # Token-based & semantic chunking
+│   │   ├── models/
+│   │   │   └── chunk.py            # Chunk data model
+│   │   └── retrieval/              # Search & evaluation
+│   │       ├── hybrid_retriever.py # FAISS + BM25 fusion
+│   │       ├── fusion.py           # RRF fusion utilities
+│   │       └── evaluation.py       # Retrieval metrics
+│   ├── tests/                      # Unit tests (unittest framework)
+│   ├── requirements.txt            # Direct dependencies
+│   ├── constraints.txt             # Pinned versions
+│   ├── Dockerfile                  # Python 3.12 slim
+│   └── .env.example                # Configuration template
+├── frontend/
+│   ├── src/
+│   │   ├── components/             # React components
+│   │   │   ├── HeroSection.tsx     # Landing page
+│   │   │   ├── UploadPanel.tsx     # File upload UI
+│   │   │   ├── ChatPanel.tsx       # Chat interface
+│   │   │   ├── DocumentPanel.tsx   # Document/chunk viewer
+│   │   │   ├── TerminalWindow.tsx  # Log stream display
+│   │   │   └── EvaluationPanel.tsx # Retrieval metrics
+│   │   ├── lib/
+│   │   │   ├── store.ts            # Zustand state management
+│   │   │   └── types.ts            # TypeScript types
+│   │   ├── App.tsx                 # Main app with responsive layout
+│   │   ├── main.tsx                # Entry point
+│   │   ├── theme.ts                # Ant Design dark theme
+│   │   └── index.less              # Global styles
+│   ├── index.html
+│   ├── vite.config.ts              # Vite config with proxy
+│   ├── tsconfig.json
+│   ├── eslint.config.js
+│   ├── package.json
+│   ├── Dockerfile                  # Dev Dockerfile
+│   └── Dockerfile.prod             # Multi-stage production build
+├── docker-compose.yml              # Development orchestration
+├── docker-compose.prod.yml         # Production orchestration
+└── .github/workflows/deploy.yml    # CI/CD pipeline
+```
 
-Manual deployment is still available via SSH commands above.
+## Build and Run Commands
+
+### Development (Docker - Recommended)
+
+```bash
+# Configure API key
+cp backend/.env.example backend/.env
+# Edit backend/.env and set OPENROUTER_API_KEY
+
+# Start all services
+docker compose up --build
+
+# Access: http://localhost:3000
+# Backend: http://localhost:8000
+```
+
+### Development (Manual)
+
+**Backend:**
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt -c constraints.txt
+
+# Create .env from example, then:
+uvicorn app.main:app --reload --port 8000
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm install --legacy-peer-deps
+npm run dev
+# Access: http://localhost:3000
+```
+
+### Production Deployment
+
+```bash
+# Using docker-compose.prod.yml
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+**Important**: Backend must run with `UVICORN_WORKERS=1` because sessions and ingestion state are stored in-memory. Multiple workers would split memory across processes and break session-based flows.
+
+## Testing Commands
+
+### Backend Tests
+```bash
+cd backend
+python -m unittest discover -s tests -p "test_*.py"
+
+# Or from repo root:
+python -m unittest discover -s backend/tests -p "test_*.py"
+```
+
+### Frontend Tests
+```bash
+cd frontend
+npm run lint              # ESLint check
+npm run build             # TypeScript + Vite build
+npm run test:code-splitting   # Verify chunk splitting
+npm run bench:tbt         # Lighthouse performance benchmark
+```
+
+### CI/CD Pipeline
+The GitHub Actions workflow (`.github/workflows/deploy.yml`) runs on every push to `main`:
+1. Quality checks: lint + build + unit tests
+2. Deploy to production server via SSH
+3. Health checks on both services
+
+Required secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`
+
+## Configuration
+
+### Backend (`backend/.env`)
+
+**Required:**
+```bash
+OPENROUTER_API_KEY=your_key_here
+```
+
+**Common Settings:**
+```bash
+# Model selection
+OPENROUTER_CHAT_MODEL_SIMPLE=google/gemini-2.5-flash-lite-preview-09-2025
+OPENROUTER_CHAT_MODEL_COMPLEX=google/gemini-2.5-flash-preview-09-2025
+OPENROUTER_EMBEDDING_MODEL=qwen/qwen3-embedding-8b
+
+# Session TTL (default: 30 min)
+ERR_SESSION_TTL_SECONDS=1800
+
+# Chunking
+ERR_CHUNK_TARGET_TOKENS=512
+ERR_CHUNK_OVERLAP_TOKENS=50
+
+# Retrieval tuning
+ERR_QUERY_FUSION_ENABLED=true
+ERR_HYDE_ENABLED=true
+ERR_LLM_RERANK_ENABLED=true
+
+# Fast mode (lower latency, uses MRL 1024-dim)
+ERR_EMBEDDING_DIM_FAST_MODE=1024
+```
+
+See `backend/.env.example` for all 40+ configuration options.
+
+### Frontend (`frontend/.env.local`)
+
+```bash
+VITE_BACKEND_URL=http://localhost:8000
+```
+
+In Docker, the frontend uses `/backend` proxy path to communicate with the backend service.
+
+## Code Style Guidelines
+
+### Python (Backend)
+- **Typing**: Full type hints required (`from __future__ import annotations`)
+- **Imports**: Grouped as stdlib → third-party → local
+- **Formatting**: Follow existing patterns (PEP 8 inspired)
+- **Async**: Use `async`/`await` for I/O operations
+- **Error Handling**: Explicit exception handling with meaningful messages
+
+### TypeScript (Frontend)
+- **Strict Mode**: Enabled (`strict: true` in tsconfig)
+- **Imports**: Use `@/` alias for src-relative imports
+- **Components**: Functional components with explicit return types
+- **State**: Zustand for global state, React hooks for local state
+- **Styling**: Inline styles for dynamic values, Less for globals
+
+## Key Design Decisions
+
+### In-Memory Architecture
+- **No database** — all session data stored in Python memory
+- Sessions auto-expire after TTL (default 30 min)
+- Background cleanup task runs every 30 seconds
+- **Implication**: Single-worker deployment only; restarts clear all data
+
+### Hybrid Retrieval Pipeline
+1. **HyDE** — Generate hypothetical answer for query expansion
+2. **Multi-Query** — Generate 6-8 query variants
+3. **Hybrid Search** — FAISS (vector) + BM25 (keyword) in parallel
+4. **RRF Fusion** — Reciprocal Rank Fusion of results
+5. **LLM Rerank** — Yes/no relevance judge (optional)
+6. **Repacking** — Reverse order (most relevant near end)
+
+### Fast Mode vs Accuracy Mode
+- **Fast Mode**: Uses MRL 1024-dim embeddings, skips some pipeline steps
+- **Accuracy Mode**: Full 4096-dim embeddings, complete pipeline
+- Toggle controlled by UI switch
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/upload` | POST | Upload document (multipart/form-data) |
+| `/api/logs/{session_id}` | GET | SSE stream of ingestion logs |
+| `/chat` | POST | Chat with RAG (JSON) |
+| `/evaluation` | GET | Get retrieval evaluation metrics |
+| `/export/{session_id}` | GET | Export chat history as Markdown |
+
+## Security Considerations
+
+1. **API Keys**: Stored in `.env` (never commit); loaded via `ENV_FILE` env var
+2. **CORS**: Restricted to `localhost:3000` in development
+3. **Session IDs**: UUID v4, passed via `X-Session-Id` header
+4. **No Persistence**: Documents are not stored; only processed in memory
+5. **Production**: HTTPS via Caddy with automatic Let's Encrypt
+
+## Common Development Tasks
+
+### Adding a New Endpoint
+1. Add route in `backend/app/routes.py`
+2. Add types in `backend/app/models/` if needed
+3. Add tests in `backend/tests/`
+4. Call from frontend via store or component
+
+### Adding a New Component
+1. Create in `frontend/src/components/`
+2. Export from lazy loader in `App.tsx` if needed for code-splitting
+3. Use Zustand store for state shared across components
+
+### Modifying Configuration
+1. Add field to `Settings` class in `backend/app/config.py`
+2. Add env loader logic
+3. Update `backend/.env.example` with documentation
+4. Add test in `test_config_defaults_consistency.py`
 
 ## Troubleshooting
 
-- `OPENROUTER_API_KEY is not set`: ensure `backend/.env` exists and contains `OPENROUTER_API_KEY=...` or export it in your shell.
-- Frontend cannot reach backend: confirm `VITE_BACKEND_URL` in `frontend/.env.local` matches the running backend (default `http://localhost:8000`).
-- Port conflict: run `uvicorn ... --port 8001` and update `frontend/.env.local`.
-- Slow ingestion: large documents embed in batches; optimize chunk size, batch size, or model choice first.
-- Production frontend not connecting to backend: ensure `VITE_BACKEND_URL=/backend` is set during build, and Caddy is properly configured to proxy `/backend/*` to the backend service.
+| Issue | Solution |
+|-------|----------|
+| `OPENROUTER_API_KEY is not set` | Create `backend/.env` from `.env.example` |
+| Port already in use | Change `--port` or update `VITE_BACKEND_URL` |
+| FAISS import errors | Ensure `libgomp1` is installed (in Dockerfile) |
+| Frontend can't reach backend | Check `VITE_BACKEND_URL` and CORS settings |
+| Session lost on refresh | Expected — sessions are in-memory only |
+
+## External Dependencies
+
+- **OpenRouter**: Requires valid API key for all LLM/embedding operations
+- **Hugging Face**: Downloads sentence-transformer models for local semantic chunking (if enabled)
+- **PyPI**: Uses Tsinghua mirror by default in Docker for China region
+
+---
+
+*Last updated: 2026-02-16*

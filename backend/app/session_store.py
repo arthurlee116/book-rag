@@ -72,6 +72,17 @@ class SessionState:
             self.reference_ids[c.id] = len(self.references) + 1
             self.references.append(c)
 
+    async def clear_chat_data(self) -> None:
+        """
+        Clear chat-related data while preserving retrieval data.
+        Note: run_chat does most retrieval/LLM work outside this lock, so a
+        concurrent clear can race with a request that is about to append a turn.
+        """
+        async with self.lock:
+            self.chat_history.clear()
+            self.latest_evaluation = None
+            self.reference_ids.clear()
+            self.references.clear()
 
 # Global in-memory session store (ephemeral; cleared on process restart)
 SESSIONS: dict[str, SessionState] = {}

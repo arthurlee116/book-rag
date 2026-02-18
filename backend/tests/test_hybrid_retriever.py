@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from backend.app.retrieval.hybrid_retriever import HybridRetriever
+from backend.app.retrieval.hybrid_retriever import HybridRetriever, detect_dominant_language
 from backend.app.models.chunk import ChunkModel
 
 class TestHybridRetriever(unittest.TestCase):
@@ -136,6 +136,41 @@ class TestHybridRetriever(unittest.TestCase):
         self.retriever.search(query="chunk", query_embedding=query_emb, top_k=5, search_dim=4)
         second_index = self.retriever._mrl_faiss_index_cache[4]
         self.assertIs(first_index, second_index)
+
+    def test_detect_dominant_language_short_chinese(self):
+        self.assertEqual(detect_dominant_language("你好"), "zh")
+        self.assertEqual(detect_dominant_language("请问第3章讲了什么"), "zh")
+        self.assertEqual(detect_dominant_language("what is chapter 3 about"), "en")
+
+    def test_tokenize_english_light_stemming(self):
+        tokens = self.retriever._tokenize(
+            "Policies tested testing boxes cats class analysis the and",
+            language="en",
+        )
+        self.assertIn("policy", tokens)
+        self.assertIn("test", tokens)
+        self.assertIn("box", tokens)
+        self.assertIn("cat", tokens)
+        self.assertIn("class", tokens)
+        self.assertIn("analysis", tokens)
+        self.assertNotIn("the", tokens)
+        self.assertNotIn("and", tokens)
+
+    def test_tokenize_english_handles_common_irregular_forms(self):
+        tokens = self.retriever._tokenize(
+            "dying tied indices matrices vertices",
+            language="en",
+        )
+        self.assertIn("die", tokens)
+        self.assertIn("tie", tokens)
+        self.assertIn("index", tokens)
+        self.assertIn("matrix", tokens)
+        self.assertIn("vertex", tokens)
+
+    def test_warmup_mrl_populates_cache(self):
+        self.retriever.warmup_mrl(4)
+        self.assertIn(4, self.retriever._mrl_faiss_index_cache)
+        self.assertIn(4, self.retriever._mrl_doc_embeddings_cache)
 
 if __name__ == '__main__':
     unittest.main()
