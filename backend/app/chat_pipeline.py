@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+from difflib import SequenceMatcher
+import re
 from typing import cast
 
 from fastapi import HTTPException
@@ -157,6 +159,86 @@ def _extract_citation_numbers(answer: str) -> list[int]:
     from .guardrails import extract_citation_numbers
 
     return extract_citation_numbers(answer)
+
+
+_INLINE_CITATION_RE = re.compile(r"\[(\d+)\]")
+
+
+def _normalize_similarity_text(text: str) -> str:
+    no_cites = _INLINE_CITATION_RE.sub(" ", text or "")
+    return " ".join(no_cites.split()).strip().lower()
+
+
+def _text_similarity(a: str, b: str) -> float:
+    if not a or not b:
+        return 0.0
+    return float(SequenceMatcher(None, a, b).ratio())
+
+
+def _is_repeat_or_compare_request(query: str) -> bool:
+    q = (query or "").strip().lower()
+    if not q:
+        return False
+    hints = (
+        "repeat",
+        "again",
+        "same as",
+        "summarize previous",
+        "compare",
+        "对比",
+        "比较",
+        "重复",
+        "再说",
+        "再讲",
+        "复述",
+        "上一个问题",
+        "上一题",
+    )
+    return any(h in q for h in hints)
+
+
+def _latest_turn_content(history_turns: list[ChatTurn], role: str) -> str:
+    for t in reversed(history_turns):
+        if t.role == role:
+            return t.content or ""
+    return ""
+
+
+def _looks_like_repeated_answer(
+    *,
+    settings: Settings,
+    user_query: str,
+    history_turns: list[ChatTurn],
+    answer: str,
+) -> bool:
+    if not bool(settings.answer_repeat_guard_enabled):
+        return False
+    if _is_repeat_or_compare_request(user_query):
+        return False
+
+    prev_user = _latest_turn_content(history_turns, "user")
+    prev_assistant = _latest_turn_content(history_turns, "assistant")
+    if not prev_user or not prev_assistant:
+        return False
+
+    curr_answer = _normalize_similarity_text(answer)
+    if not curr_answer:
+        return False
+    if curr_answer == _normalize_similarity_text(STRICT_NO_MENTION):
+        return False
+
+    query_sim = _text_similarity(
+        _normalize_similarity_text(user_query),
+        _normalize_similarity_text(prev_user),
+    )
+    answer_sim = _text_similarity(
+        curr_answer,
+        _normalize_similarity_text(prev_assistant),
+    )
+    return (
+        answer_sim >= float(settings.answer_repeat_answer_similarity_min)
+        and query_sim <= float(settings.answer_repeat_query_similarity_max)
+    )
 
 
 def _normalize_language_tag(raw: str) -> str:
@@ -679,6 +761,7 @@ async def run_chat(
         '2) If the answer cannot be found in CONTEXT, reply exactly: "The document does not mention this."\n'
         "3) When you use information from an excerpt, cite it with stacked citations like [1][2].\n"
         "4) Do not use any outside knowledge. Do not guess.\n"
+        "5) Answer ONLY the current user question. Do not repeat prior answers unless the user explicitly asks.\n"
     )
 
     history_truncated = False
@@ -688,6 +771,7 @@ async def run_chat(
             history_turns = []
         else:
             history_turns = session.chat_history[-max_turns:]
+        # Build a flat text representation only for token estimation.
         history_text = "\n".join([f"{t.role}: {t.content}" for t in history_turns])
 
     max_history_chars = max(0, int(settings.chat_history_max_chars))
@@ -696,6 +780,18 @@ async def run_chat(
     )
     if history_truncated:
         await session.log("[LOG] Chat: trimmed chat history to configured char window.")
+        # Re-derive truncated turns from the trimmed text length for message building.
+        # Simple approach: drop oldest turns until we fit within the char budget.
+        char_budget = max_history_chars
+        kept_turns: list[ChatTurn] = []
+        for turn in reversed(history_turns):
+            turn_text = f"{turn.role}: {turn.content}"
+            if char_budget >= len(turn_text):
+                kept_turns.insert(0, turn)
+                char_budget -= len(turn_text) + 1  # +1 for newline
+            else:
+                break
+        history_turns = kept_turns
 
     prompt_tokens = _estimate_prompt_tokens(
         text_parts=[system_prompt, history_text, context_text, user_query]
@@ -707,11 +803,20 @@ async def run_chat(
             detail="Session limit reached. Please export and refresh.",
         )
 
+    # Build messages: expand history as proper user/assistant turns so the LLM
+    # does not confuse prior answers with the current CONTEXT or question.
+    # Injecting history as a single assistant message caused the model to reuse
+    # the previous answer verbatim for different questions (temperature=0 + same
+    # leading assistant content = identical output).
     messages: list[ChatMessage] = [ChatMessage(role="system", content=system_prompt)]
-    if history_text:
-        messages.append(ChatMessage(role="assistant", content=f"CHAT_HISTORY:\n{history_text}"))
-    messages.append(ChatMessage(role="assistant", content=f"CONTEXT:\n{context_text}"))
-    messages.append(ChatMessage(role="user", content=user_query))
+    for turn in history_turns:
+        messages.append(ChatMessage(role=turn.role, content=turn.content))
+    messages.append(
+        ChatMessage(
+            role="user",
+            content=f"CONTEXT:\n{context_text}\n\nCURRENT_QUESTION:\n{user_query}",
+        )
+    )
 
     await session.log("[LOG] Chat: generating answer (strict RAG)...")
     try:
@@ -727,22 +832,36 @@ async def run_chat(
     # - require citations for any non-fallback answer
     # - citations must be in range
     # - on failure, retry once (common failure mode: missing/invalid citations)
-    gr = enforce_strict_rag_answer(
-        answer=answer,
-        context_size=len(retrieved_chunks),
-        require_citations=True,
-    )
-    if not gr.ok:
-        await session.log(f"[LOG] Guardrails triggered: {gr.reason} -> retrying once")
+    def _evaluate_answer(answer_text: str) -> tuple[bool, str, str | None]:
+        gr_local = enforce_strict_rag_answer(
+            answer=answer_text,
+            context_size=len(retrieved_chunks),
+            require_citations=True,
+        )
+        if not gr_local.ok:
+            return False, gr_local.answer, gr_local.reason
+        if _looks_like_repeated_answer(
+            settings=settings,
+            user_query=user_query,
+            history_turns=history_turns,
+            answer=gr_local.answer,
+        ):
+            return False, STRICT_NO_MENTION, "repeats_previous_answer"
+        return True, gr_local.answer, None
+
+    ok1, evaluated_answer1, reason1 = _evaluate_answer(answer)
+    if not ok1:
+        await session.log(f"[LOG] Guardrails triggered: {reason1} -> retrying once")
         retry_user_prompt = (
-            "Your previous answer was rejected because it did not follow the required citation rules.\n"
+            "Your previous answer was rejected because it violated response constraints.\n"
             "Re-answer the user's question using ONLY CONTEXT.\n\n"
             "Output MUST be exactly one of:\n"
             f'- "{STRICT_NO_MENTION}" (if the answer is not in CONTEXT)\n'
             "- OR an answer that includes stacked citations like [1][2], where each n is between "
             f"1 and {len(retrieved_chunks)}.\n\n"
+            "Do NOT repeat or restate a previous answer when the current question is different.\n"
             "Do not add any extra commentary.\n"
-            f"Rejection reason: {gr.reason}\n"
+            f"Rejection reason: {reason1}\n"
         )
         retry_messages = list(messages)
         retry_messages.append(
@@ -759,20 +878,16 @@ async def run_chat(
             await session.log(f"[LOG] Chat retry failed: {e} -> forcing fallback")
             answer = STRICT_NO_MENTION
         else:
-            gr2 = enforce_strict_rag_answer(
-                answer=answer2,
-                context_size=len(retrieved_chunks),
-                require_citations=True,
-            )
-            if not gr2.ok:
+            ok2, evaluated_answer2, reason2 = _evaluate_answer(answer2)
+            if not ok2:
                 await session.log(
-                    f"[LOG] Guardrails retry still failed: {gr2.reason} -> forcing fallback"
+                    f"[LOG] Guardrails retry still failed: {reason2} -> forcing fallback"
                 )
                 answer = STRICT_NO_MENTION
             else:
-                answer = gr2.answer
+                answer = evaluated_answer2
     else:
-        answer = gr.answer
+        answer = evaluated_answer1
 
     # IMPORTANT for frontend:
     # - The model cites [1]..[K] based on the CONTEXT numbering.

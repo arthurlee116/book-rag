@@ -51,6 +51,17 @@ class TestConfigDefaultsConsistency(unittest.TestCase):
         )
         self.assertEqual(loaded.chat_history_max_turns, static_defaults.chat_history_max_turns)
         self.assertEqual(loaded.chat_history_max_chars, static_defaults.chat_history_max_chars)
+        self.assertEqual(
+            loaded.answer_repeat_guard_enabled, static_defaults.answer_repeat_guard_enabled
+        )
+        self.assertEqual(
+            loaded.answer_repeat_answer_similarity_min,
+            static_defaults.answer_repeat_answer_similarity_min,
+        )
+        self.assertEqual(
+            loaded.answer_repeat_query_similarity_max,
+            static_defaults.answer_repeat_query_similarity_max,
+        )
 
 
 if __name__ == "__main__":

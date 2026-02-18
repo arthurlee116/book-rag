@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-
 class Settings(BaseModel):
     # OpenRouter
     openrouter_api_key: str = ""
@@ -67,6 +66,12 @@ class Settings(BaseModel):
     llm_rerank_model: str = ""  # default: use chat_model_complex
     llm_rerank_candidate_pool: int = 30
     llm_rerank_max_chars: int = 900
+
+    # Answer repeat guard:
+    # Prevents "different question, same answer" regressions caused by history carry-over.
+    answer_repeat_guard_enabled: bool = True
+    answer_repeat_answer_similarity_min: float = 0.9
+    answer_repeat_query_similarity_max: float = 0.6
 
     # Sessions
     session_ttl_seconds: int = 60 * 30  # 30 minutes inactivity
@@ -220,6 +225,13 @@ def load_settings() -> Settings:
         llm_rerank_model=os.getenv("ERR_LLM_RERANK_MODEL", ""),
         llm_rerank_candidate_pool=getenv_int("ERR_LLM_RERANK_CANDIDATE_POOL", 30),
         llm_rerank_max_chars=getenv_int("ERR_LLM_RERANK_MAX_CHARS", 900),
+        answer_repeat_guard_enabled=getenv_bool("ERR_ANSWER_REPEAT_GUARD_ENABLED", True),
+        answer_repeat_answer_similarity_min=getenv_float(
+            "ERR_ANSWER_REPEAT_ANSWER_SIMILARITY_MIN", 0.9
+        ),
+        answer_repeat_query_similarity_max=getenv_float(
+            "ERR_ANSWER_REPEAT_QUERY_SIMILARITY_MAX", 0.6
+        ),
         session_ttl_seconds=getenv_int("ERR_SESSION_TTL_SECONDS", 60 * 30),
         session_cleanup_interval_seconds=getenv_int(
             "ERR_SESSION_CLEANUP_INTERVAL_SECONDS", 30
