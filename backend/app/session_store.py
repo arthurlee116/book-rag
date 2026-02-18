@@ -41,6 +41,8 @@ class SessionState:
     # Processing state
     ingest_status: str = "idle"  # "idle" | "processing" | "ready" | "error"
     ingest_error: str | None = None
+    # Monotonic upload generation used to discard stale ingestion tasks.
+    ingest_generation: int = 0
 
     # SSE logs
     log_seq: int = 0

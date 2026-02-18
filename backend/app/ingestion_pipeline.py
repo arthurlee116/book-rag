@@ -17,12 +17,18 @@ async def ingest_file(
     content: bytes,
     settings: Settings,
     openrouter: OpenRouterClient,
+    ingest_generation: int | None = None,
 ) -> None:
     session = get_session(session_id=session_id, ttl_seconds=settings.session_ttl_seconds)
     if session is None:
         return
 
     async with session.lock:
+        if (
+            ingest_generation is not None
+            and ingest_generation != session.ingest_generation
+        ):
+            return
         session.ingest_status = "processing"
         session.ingest_error = None
         session.filename = filename
@@ -43,6 +49,11 @@ async def ingest_file(
         )
     except Exception as e:  # noqa: BLE001
         async with session.lock:
+            if (
+                ingest_generation is not None
+                and ingest_generation != session.ingest_generation
+            ):
+                return
             session.ingest_status = "error"
             session.ingest_error = str(e)
         await session.log(f"[LOG] ERROR parsing: {e}")
@@ -69,6 +80,11 @@ async def ingest_file(
         chunks = await loop.run_in_executor(None, lambda: chunker.chunk(blocks=blocks))
     except Exception as e:  # noqa: BLE001
         async with session.lock:
+            if (
+                ingest_generation is not None
+                and ingest_generation != session.ingest_generation
+            ):
+                return
             session.ingest_status = "error"
             session.ingest_error = str(e)
         await session.log(f"[LOG] ERROR chunking: {e}")
@@ -77,6 +93,11 @@ async def ingest_file(
     await session.log(f"[LOG] Created {len(chunks)} chunks")
     if not chunks:
         async with session.lock:
+            if (
+                ingest_generation is not None
+                and ingest_generation != session.ingest_generation
+            ):
+                return
             session.ingest_status = "error"
             session.ingest_error = "No chunks created from document"
         await session.log("[LOG] ERROR: No chunks created from document")
@@ -128,6 +149,11 @@ async def ingest_file(
                 if pending:
                     await asyncio.gather(*pending, return_exceptions=True)
                 async with session.lock:
+                    if (
+                        ingest_generation is not None
+                        and ingest_generation != session.ingest_generation
+                    ):
+                        return
                     session.ingest_status = "error"
                     session.ingest_error = err
                 await session.log(f"[LOG] ERROR embedding batch {b_idx + 1}: {err}")
@@ -142,6 +168,11 @@ async def ingest_file(
                 await session.log(f"[LOG] Detected embedding dim: {detected_embedding_dim}")
             elif batch_dim != detected_embedding_dim:
                 async with session.lock:
+                    if (
+                        ingest_generation is not None
+                        and ingest_generation != session.ingest_generation
+                    ):
+                        return
                     session.ingest_status = "error"
                     session.ingest_error = (
                         f"Inconsistent embedding dim across batches: "
@@ -167,6 +198,11 @@ async def ingest_file(
 
     if detected_embedding_dim is None or embeddings_matrix is None:
         async with session.lock:
+            if (
+                ingest_generation is not None
+                and ingest_generation != session.ingest_generation
+            ):
+                return
             session.ingest_status = "error"
             session.ingest_error = "Could not determine embedding dimension"
         await session.log("[LOG] ERROR: Could not determine embedding dimension")
@@ -192,6 +228,11 @@ async def ingest_file(
         )
     except Exception as e:  # noqa: BLE001
         async with session.lock:
+            if (
+                ingest_generation is not None
+                and ingest_generation != session.ingest_generation
+            ):
+                return
             session.ingest_status = "error"
             session.ingest_error = str(e)
         await session.log(f"[LOG] ERROR building indexes: {e}")
@@ -205,10 +246,20 @@ async def ingest_file(
         except Exception as e:  # noqa: BLE001
             await session.log(f"[LOG] WARNING: MRL pre-warm failed ({e}); continuing.")
 
+    stale = False
     async with session.lock:
-        session.chunks = chunks
-        session.retriever = retriever
-        session.doc_language = retriever.doc_language
-        session.ingest_status = "ready"
+        if (
+            ingest_generation is not None
+            and ingest_generation != session.ingest_generation
+        ):
+            stale = True
+        else:
+            session.chunks = chunks
+            session.retriever = retriever
+            session.doc_language = retriever.doc_language
+            session.ingest_status = "ready"
+    if stale:
+        await session.log("[LOG] Stale ingestion task finished; discarded.")
+        return
 
     await session.log("[LOG] Ready.")

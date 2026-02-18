@@ -37,6 +37,10 @@ async def upload(
     if not content:
         raise HTTPException(status_code=400, detail="Empty file")
 
+    async with session.lock:
+        session.ingest_generation += 1
+        ingest_generation = session.ingest_generation
+
     await session.log("[LOG] Upload accepted; starting background ingestion...")
     asyncio.create_task(
         ingest_file(
@@ -45,6 +49,7 @@ async def upload(
             content=content,
             settings=settings,
             openrouter=openrouter,
+            ingest_generation=ingest_generation,
         )
     )
 
@@ -56,8 +61,9 @@ async def logs(
     session_id: str,
     settings: Settings = Depends(get_settings),
 ) -> EventSourceResponse:
-    # Use get_or_create to handle race condition where SSE connects before upload completes
-    session = get_or_create_session(session_id=session_id, ttl_seconds=settings.session_ttl_seconds)
+    session = get_session(session_id=session_id, ttl_seconds=settings.session_ttl_seconds)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Unknown session")
 
     async def event_generator():
         # Replay recent history first.
