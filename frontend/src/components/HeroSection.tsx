@@ -1,11 +1,12 @@
 import { ReactNode } from "react";
-import { Space, Typography } from "antd";
+import { Typography } from "antd";
 import {
   SecurityScanOutlined,
   DatabaseOutlined,
   ThunderboltOutlined,
   CheckCircleOutlined,
 } from "@ant-design/icons";
+import { themeTokens } from "@/theme";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -26,37 +27,38 @@ function FeatureItem({ icon, title, description, delay = "0s" }: FeatureItemProp
       style={{
         opacity: 0,
         animationDelay: delay,
-        padding: "24px",
+        padding: "28px 24px",
         display: "flex",
         flexDirection: "column",
-        gap: "12px",
+        gap: "14px",
         minHeight: "160px",
       }}
     >
       <div
         style={{
-          fontSize: "28px",
-          color: "#00d4ff",
+          fontSize: "26px",
+          color: themeTokens.accentPrimary,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          width: "56px",
-          height: "56px",
-          background: "rgba(0, 212, 255, 0.1)",
-          borderRadius: "12px",
+          width: "52px",
+          height: "52px",
+          background: "rgba(212, 145, 92, 0.08)",
+          borderRadius: "14px",
+          border: "1px solid rgba(212, 145, 92, 0.12)",
         }}
       >
         {icon}
       </div>
       <div>
-        <Title level={5} style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>
+        <Title level={5} style={{ margin: 0, fontSize: "16px", fontWeight: 600, fontFamily: '"Inter", sans-serif' }}>
           {title}
         </Title>
         <Paragraph
           style={{
             margin: "8px 0 0",
-            fontSize: "13px",
-            color: "#9ca3af",
+            fontSize: "13.5px",
+            color: themeTokens.textSecondary,
             lineHeight: "1.7",
           }}
         >
@@ -76,25 +78,25 @@ export function HeroSection() {
       icon: <SecurityScanOutlined />,
       title: "In-Memory Only",
       description: "Your document is processed entirely in RAM. No disk writes, no database storage.",
-      delay: "0.1s",
+      delay: "0.15s",
     },
     {
       icon: <DatabaseOutlined />,
       title: "Session Auto-Cleanup",
       description: "All data is automatically purged after 30 minutes of inactivity. Zero traces.",
-      delay: "0.2s",
+      delay: "0.25s",
     },
     {
       icon: <CheckCircleOutlined />,
       title: "Strict RAG",
       description: "Every answer is grounded in retrieved passages. No hallucinations, no fabrications.",
-      delay: "0.3s",
+      delay: "0.35s",
     },
     {
       icon: <ThunderboltOutlined />,
       title: "Instant Setup",
       description: "No registration required. Upload, ask questions, get answers. Then it's all gone.",
-      delay: "0.4s",
+      delay: "0.45s",
     },
   ];
 
@@ -105,104 +107,134 @@ export function HeroSection() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        padding: "60px 20px",
-        background:
-          "radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 212, 255, 0.08), transparent), #050507",
+        padding: "80px 24px 60px",
+        background: themeTokens.bgLayout,
+        position: "relative",
+        overflow: "hidden",
       }}
     >
-      {/* Background grid effect */}
+      {/* Warm ambient glow */}
       <div
         style={{
-          position: "fixed",
-          inset: 0,
-          backgroundImage:
-            "linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px)",
-          backgroundSize: "50px 50px",
+          position: "absolute",
+          top: "-30%",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "120%",
+          height: "60%",
+          background:
+            "radial-gradient(ellipse 60% 70% at 50% 30%, rgba(212, 145, 92, 0.06), transparent 70%)",
           pointerEvents: "none",
           zIndex: 0,
         }}
       />
 
-      <div style={{ position: "relative", zIndex: 1, maxWidth: "1200px", width: "100%" }}>
-        {/* Header */}
+      {/* Subtle dot pattern instead of grid */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          backgroundImage:
+            "radial-gradient(circle, rgba(212, 145, 92, 0.04) 1px, transparent 1px)",
+          backgroundSize: "32px 32px",
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      />
+
+      <div style={{ position: "relative", zIndex: 1, maxWidth: "1100px", width: "100%" }}>
+        {/* Header Section */}
         <div
           className="animate-fade-in-up"
           style={{
             opacity: 0,
             textAlign: "center",
-            marginBottom: "60px",
+            marginBottom: "64px",
           }}
         >
-          <Space direction="vertical" size="large" style={{ width: "100%" }}>
-            <div>
-              <div className="badge" style={{ marginBottom: "20px" }}>
-                <span className="status-dot ready" />
-                Session-Based • In-Memory • Zero Persistence
-              </div>
-              <Title
-                style={{
-                  fontSize: "clamp(36px, 5vw, 64px)",
-                  fontWeight: 700,
-                  lineHeight: "1.1",
-                  marginBottom: "20px",
-                  background: "linear-gradient(135deg, #00d4ff 0%, #8b5cf6 50%, #3b82f6 100%)",
-                  backgroundSize: "200% 200%",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                  animation: "gradientShift 4s ease infinite",
-                }}
-              >
-                Privacy-First Document Q&A
-              </Title>
-              <Title
-                level={2}
-                style={{
-                  fontSize: "clamp(18px, 2.5vw, 24px)",
-                  fontWeight: 400,
-                  color: "#9ca3af",
-                  maxWidth: "700px",
-                  margin: "0 auto",
-                  lineHeight: "1.6",
-                }}
-              >
-                Upload any document. Ask questions. Get answers with citations.
-                <br />
-                Everything disappears when you're done.
-              </Title>
+          {/* Status Badge */}
+          <div style={{ marginBottom: "28px" }}>
+            <div className="badge">
+              <span className="status-dot ready" style={{ width: "6px", height: "6px" }} />
+              Session-Based · In-Memory · Zero Persistence
             </div>
+          </div>
 
-            <div
+          {/* Main Headline */}
+          <Title
+            style={{
+              fontSize: "clamp(38px, 5vw, 62px)",
+              fontWeight: 700,
+              lineHeight: "1.08",
+              marginBottom: "24px",
+              color: themeTokens.textPrimary,
+              letterSpacing: "-0.03em",
+            }}
+          >
+            Privacy-First
+            <br />
+            <span
               style={{
-                display: "flex",
-                gap: "16px",
-                justifyContent: "center",
-                flexWrap: "wrap",
+                background: "linear-gradient(135deg, #D4915C 0%, #E8A96B 50%, #D4915C 100%)",
+                backgroundSize: "200% 200%",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+                animation: "gradientShift 4s ease infinite",
               }}
             >
-              <div className="badge">
-                <span style={{ marginRight: "6px" }}>●</span>
-                .txt .md .docx .epub .mobi
-              </div>
-              <div className="badge">
-                <span style={{ marginRight: "6px" }}>●</span>
-                No account required
-              </div>
-              <div className="badge">
-                <span style={{ marginRight: "6px" }}>●</span>
-                Open source
-              </div>
+              Document Q&A
+            </span>
+          </Title>
+
+          {/* Sub headline */}
+          <p
+            style={{
+              fontSize: "clamp(16px, 2.2vw, 20px)",
+              fontWeight: 400,
+              color: themeTokens.textSecondary,
+              maxWidth: "580px",
+              margin: "0 auto",
+              lineHeight: "1.7",
+              fontFamily: '"Inter", sans-serif',
+            }}
+          >
+            Upload any document. Ask questions. Get answers with citations.
+            <br />
+            <span style={{ color: themeTokens.textTertiary }}>
+              Everything disappears when you're done.
+            </span>
+          </p>
+
+          {/* Capability badges */}
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              justifyContent: "center",
+              flexWrap: "wrap",
+              marginTop: "32px",
+            }}
+          >
+            <div className="badge" style={{ fontSize: "11px", padding: "5px 12px" }}>
+              .txt .md .docx .epub .mobi
             </div>
-          </Space>
+            <div className="badge" style={{ fontSize: "11px", padding: "5px 12px" }}>
+              No account required
+            </div>
+            <div className="badge" style={{ fontSize: "11px", padding: "5px 12px" }}>
+              Open source
+            </div>
+          </div>
         </div>
 
         {/* Features Grid */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: "20px",
-            marginBottom: "60px",
+            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+            gap: "16px",
+            marginBottom: "48px",
           }}
         >
           {features.map((feature, index) => (
@@ -221,18 +253,18 @@ export function HeroSection() {
           className="animate-fade-in-up"
           style={{
             opacity: 0,
-            animationDelay: "0.5s",
+            animationDelay: "0.55s",
             textAlign: "center",
-            padding: "20px",
-            background: "rgba(13, 13, 18, 0.5)",
-            border: "1px solid rgba(0, 212, 255, 0.1)",
-            borderRadius: "12px",
-            maxWidth: "600px",
+            padding: "18px 24px",
+            background: "rgba(26, 25, 24, 0.6)",
+            border: "1px solid rgba(212, 145, 92, 0.06)",
+            borderRadius: "14px",
+            maxWidth: "560px",
             margin: "0 auto",
           }}
         >
-          <Text style={{ color: "#6b7280", fontSize: "13px" }}>
-            <SecurityScanOutlined style={{ marginRight: "8px", color: "#00d4ff" }} />
+          <Text style={{ color: themeTokens.textTertiary, fontSize: "13px", lineHeight: "1.7" }}>
+            <SecurityScanOutlined style={{ marginRight: "8px", color: themeTokens.accentPrimary }} />
             Your document is processed in-memory and automatically deleted after 30 minutes of
             inactivity. No data is ever written to disk or stored in a database.
           </Text>

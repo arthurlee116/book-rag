@@ -3,6 +3,7 @@ import { Button, Input, Select, Typography, Alert, Space, Modal } from "antd";
 import { SendOutlined, DownloadOutlined, ThunderboltOutlined, MessageOutlined, ClearOutlined } from "@ant-design/icons";
 import { useErrStore } from "@/lib/store";
 import type { ChunkModel } from "@/lib/types";
+import { themeTokens } from "@/theme";
 
 const { Text } = Typography;
 
@@ -31,11 +32,11 @@ function renderWithCitationButtons(
             fontSize: "11px",
             fontWeight: 500,
             borderRadius: "4px",
-            background: disabled ? "#1f2937" : "rgba(0, 212, 255, 0.15)",
-            color: disabled ? "#6b7280" : "#00d4ff",
+            background: disabled ? themeTokens.border : "rgba(212, 145, 92, 0.12)",
+            color: disabled ? themeTokens.textTertiary : themeTokens.accentPrimary,
             cursor: disabled ? "not-allowed" : "pointer",
             transition: "all 0.15s",
-            border: disabled ? "1px solid #1f2937" : "1px solid rgba(0, 212, 255, 0.3)",
+            border: disabled ? `1px solid ${themeTokens.border}` : "1px solid rgba(212, 145, 92, 0.25)",
           }}
         >
           [{n}]
@@ -179,7 +180,7 @@ export function ChatPanel() {
         height: isDesktop ? "calc(100vh - 120px)" : "auto",
         display: "flex",
         flexDirection: "column",
-        background: "rgba(13, 13, 18, 0.7)",
+        background: themeTokens.surfaceContainerSolid,
         backdropFilter: "blur(12px)",
       }}
     >
@@ -191,7 +192,7 @@ export function ChatPanel() {
           alignItems: "center",
           marginBottom: "16px",
           paddingBottom: "12px",
-          borderBottom: "1px solid #1f2937",
+          borderBottom: `1px solid ${themeTokens.border}`,
         }}
       >
         <div
@@ -201,8 +202,8 @@ export function ChatPanel() {
             gap: "8px",
           }}
         >
-          <MessageOutlined style={{ color: "#00d4ff", fontSize: "16px" }} />
-          <Text strong style={{ color: "#e5e5e5", fontSize: "14px" }}>
+          <MessageOutlined style={{ color: themeTokens.accentPrimary, fontSize: "16px" }} />
+          <Text strong style={{ color: themeTokens.textPrimary, fontSize: "14px" }}>
             Chat
           </Text>
         </div>
@@ -213,9 +214,9 @@ export function ChatPanel() {
             onClick={() => setFastMode(!fastMode)}
             disabled={busy}
             style={{
-              background: fastMode ? "rgba(245, 158, 11, 0.15)" : "#14141a",
-              borderColor: fastMode ? "#f59e0b" : "#1f2937",
-              color: fastMode ? "#f59e0b" : "#9ca3af",
+              background: fastMode ? "rgba(232, 184, 75, 0.12)" : themeTokens.bgContainer,
+              borderColor: fastMode ? themeTokens.colorWarning : themeTokens.border,
+              color: fastMode ? themeTokens.colorWarning : themeTokens.textSecondary,
               height: "32px",
             }}
           >
@@ -240,9 +241,9 @@ export function ChatPanel() {
             onClick={onClear}
             disabled={!sessionId || busy || uploadStatus !== "ready"}
             style={{
-              background: "#14141a",
-              borderColor: "#1f2937",
-              color: "#9ca3af",
+              background: themeTokens.bgContainer,
+              borderColor: themeTokens.border,
+              color: themeTokens.textSecondary,
               height: "32px",
             }}
           >
@@ -254,9 +255,9 @@ export function ChatPanel() {
             onClick={onExport}
             disabled={!sessionId}
             style={{
-              background: "#14141a",
-              borderColor: "#1f2937",
-              color: "#9ca3af",
+              background: themeTokens.bgContainer,
+              borderColor: themeTokens.border,
+              color: themeTokens.textSecondary,
               height: "32px",
             }}
           >
@@ -274,9 +275,9 @@ export function ChatPanel() {
           overflow: "auto",
           marginBottom: "16px",
           padding: "16px",
-          background: "rgba(13, 13, 18, 0.5)",
-          borderRadius: "10px",
-          border: "1px solid #1f2937",
+          background: themeTokens.surfaceContainer,
+          borderRadius: "12px",
+          border: `1px solid ${themeTokens.border}`,
           minHeight: "200px",
         }}
       >
@@ -300,7 +301,7 @@ export function ChatPanel() {
             >
               💬
             </div>
-            <Text style={{ color: "#6b7280", fontSize: "13px", textAlign: "center" }}>
+            <Text style={{ color: themeTokens.textTertiary, fontSize: "13px", textAlign: "center" }}>
               Upload a document, wait for "ready", then ask a question.
             </Text>
           </div>
@@ -320,13 +321,13 @@ export function ChatPanel() {
                     padding: "12px 16px",
                     borderRadius: "12px",
                     background: m.role === "user"
-                      ? "linear-gradient(135deg, #00d4ff 0%, #3b82f6 100%)"
-                      : "#14141a",
-                    color: "#e5e5e5",
+                      ? themeTokens.gradientAccent
+                      : themeTokens.bgContainer,
+                    color: m.role === "user" ? themeTokens.textOnAccent : themeTokens.textPrimary,
                     fontSize: "14px",
                     lineHeight: "1.6",
                     boxShadow: m.role === "user"
-                      ? "0 2px 8px rgba(0, 212, 255, 0.2)"
+                      ? "0 2px 8px rgba(212, 145, 92, 0.2)"
                       : "0 2px 8px rgba(0, 0, 0, 0.2)",
                   }}
                 >
@@ -339,7 +340,7 @@ export function ChatPanel() {
                     display: "block",
                     marginTop: "4px",
                     fontSize: "11px",
-                    color: "#6b7280",
+                    color: themeTokens.textTertiary,
                     marginLeft: m.role === "user" ? "0" : "4px",
                     marginRight: m.role === "user" ? "4px" : "0",
                     textAlign: m.role === "user" ? "right" : "left",
@@ -361,7 +362,7 @@ export function ChatPanel() {
                   style={{
                     padding: "12px 16px",
                     borderRadius: "12px",
-                    background: "#14141a",
+                    background: themeTokens.bgContainer,
                     display: "flex",
                     alignItems: "center",
                     gap: "8px",
@@ -371,7 +372,7 @@ export function ChatPanel() {
                     className="status-dot processing"
                     style={{ margin: 0 }}
                   />
-                  <Text style={{ color: "#6b7280", fontSize: "13px" }}>
+                  <Text style={{ color: themeTokens.textTertiary, fontSize: "13px" }}>
                     Thinking…
                   </Text>
                 </div>
@@ -387,8 +388,8 @@ export function ChatPanel() {
           message={error}
           style={{
             marginBottom: "12px",
-            background: "rgba(239, 68, 68, 0.1)",
-            borderColor: "rgba(239, 68, 68, 0.3)",
+            background: themeTokens.surfaceErrorSubtle,
+            borderColor: themeTokens.borderErrorSubtle,
           }}
           showIcon
         />
@@ -404,9 +405,9 @@ export function ChatPanel() {
           disabled={!canChat}
           style={{
             flex: 1,
-            background: "#0d0d12",
-            border: "1px solid #1f2937",
-            color: "#e5e5e5",
+            background: themeTokens.bgContainer,
+            border: `1px solid ${themeTokens.border}`,
+            color: themeTokens.textPrimary,
           }}
         />
         <Button
@@ -416,8 +417,10 @@ export function ChatPanel() {
           disabled={!canChat}
           style={{
             height: "42px",
-            background: canChat ? "linear-gradient(135deg, #00d4ff 0%, #3b82f6 100%)" : undefined,
+            background: canChat ? themeTokens.gradientAccent : undefined,
             border: "none",
+            color: themeTokens.textOnAccent,
+            fontWeight: 600,
           }}
         >
           Send

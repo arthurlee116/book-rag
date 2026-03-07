@@ -21,10 +21,10 @@ function buildSimpleTable(
   columns: { key: string; title: string }[],
 ) {
   return (
-      <Table
-        size="small"
-        pagination={false}
-        dataSource={rows.map((row, idx) => ({ key: `${idx}`, ...row }))}
+    <Table
+      size="small"
+      pagination={false}
+      dataSource={rows.map((row, idx) => ({ key: `${idx}`, ...row }))}
       columns={columns.map((col) => ({
         title: col.title,
         dataIndex: col.key,
@@ -38,7 +38,7 @@ function buildSimpleTable(
 
 function renderStepDetails(step: RetrievalStepData) {
   const data = step.data ?? {};
-  if (!isRecord(data)) return <Text style={{ color: "#6b7280" }}>No data recorded.</Text>;
+  if (!isRecord(data)) return <Text style={{ color: "#78716C" }}>No data recorded.</Text>;
 
   const chunks = getRecordArray(data.chunks);
   if (chunks) {
@@ -101,7 +101,7 @@ function renderStepDetails(step: RetrievalStepData) {
   }
 
   return (
-    <pre style={{ margin: 0, whiteSpace: "pre-wrap", color: "#9ca3af", fontSize: "12px" }}>
+    <pre style={{ margin: 0, whiteSpace: "pre-wrap", color: "#A8A29E", fontSize: "12px" }}>
       {JSON.stringify(data, null, 2)}
     </pre>
   );
@@ -112,7 +112,7 @@ function buildPanels(evaluation: Evaluation) {
     key: `${step.name}-${idx}`,
     label: (
       <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <Text style={{ color: "#e5e5e5" }}>{step.name}</Text>
+        <Text style={{ color: "#ECE8E1" }}>{step.name}</Text>
         {step.skipped ? (
           <Tag color="red">skipped</Tag>
         ) : (
@@ -123,7 +123,7 @@ function buildPanels(evaluation: Evaluation) {
     children: (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {step.reason && (
-          <Text style={{ color: "#6b7280", fontSize: "12px" }}>Reason: {step.reason}</Text>
+          <Text style={{ color: "#78716C", fontSize: "12px" }}>Reason: {step.reason}</Text>
         )}
         {renderStepDetails(step)}
       </div>
@@ -163,13 +163,13 @@ export function EvaluationPanel() {
       className="glass-panel"
       style={{
         padding: "16px",
-        border: "1px solid #1f2937",
+        border: "1px solid #2E2B28",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <BarChartOutlined style={{ color: "#00d4ff", fontSize: "14px" }} />
-          <Text strong style={{ color: "#e5e5e5", fontSize: "14px" }}>Retrieval Evaluation</Text>
+          <BarChartOutlined style={{ color: "#D4915C", fontSize: "14px" }} />
+          <Text strong style={{ color: "#ECE8E1", fontSize: "14px" }}>Retrieval Evaluation</Text>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <Button
@@ -177,16 +177,16 @@ export function EvaluationPanel() {
             type="text"
             icon={collapsed ? <DownOutlined /> : <UpOutlined />}
             onClick={() => setCollapsed(!collapsed)}
-            style={{ color: "#9ca3af" }}
+            style={{ color: "#A8A29E" }}
           />
           <Button
             size="small"
             onClick={onFetch}
             disabled={!sessionId || loading}
             style={{
-              background: "#14141a",
-              borderColor: "#1f2937",
-              color: "#9ca3af",
+              background: "#1A1918",
+              borderColor: "#2E2B28",
+              color: "#A8A29E",
               height: "32px",
             }}
           >
@@ -197,9 +197,9 @@ export function EvaluationPanel() {
 
       {!collapsed && (
         !sessionId ? (
-          <Text style={{ color: "#6b7280", fontSize: "13px" }}>Upload a document to start a session.</Text>
+          <Text style={{ color: "#78716C", fontSize: "13px" }}>Upload a document to start a session.</Text>
         ) : !evaluation ? (
-          <Text style={{ color: "#6b7280", fontSize: "13px" }}>No evaluation loaded yet.</Text>
+          <Text style={{ color: "#78716C", fontSize: "13px" }}>No evaluation loaded yet.</Text>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -207,32 +207,32 @@ export function EvaluationPanel() {
                 color={evaluation.mode === "fast" ? "gold" : "blue"}
                 style={{
                   background: evaluation.mode === "fast"
-                    ? "rgba(245, 158, 11, 0.15)"
-                    : "rgba(59, 130, 246, 0.15)",
+                    ? "rgba(232, 184, 75, 0.12)"
+                    : "rgba(212, 145, 92, 0.12)",
                   borderColor: evaluation.mode === "fast"
-                    ? "rgba(245, 158, 11, 0.3)"
-                    : "rgba(59, 130, 246, 0.3)",
-                  color: evaluation.mode === "fast" ? "#f59e0b" : "#3b82f6",
+                    ? "rgba(232, 184, 75, 0.25)"
+                    : "rgba(212, 145, 92, 0.25)",
+                  color: evaluation.mode === "fast" ? "#E8B84B" : "#D4915C",
                 }}
               >
                 {evaluation.mode === "fast" ? "fast mode" : "normal mode"}
               </Tag>
-              <Text style={{ color: "#6b7280", fontSize: "11px" }}>
+              <Text style={{ color: "#78716C", fontSize: "11px" }}>
                 {new Date(evaluation.timestamp).toLocaleString()}
               </Text>
             </div>
             <div
               style={{
-                background: "rgba(20, 20, 26, 0.5)",
-                borderRadius: 8,
+                background: "rgba(26, 25, 24, 0.5)",
+                borderRadius: 10,
                 padding: "12px",
-                border: "1px solid #1f2937",
+                border: "1px solid #2E2B28",
               }}
             >
-              <Text style={{ color: "#6b7280", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              <Text style={{ color: "#78716C", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                 User Query
               </Text>
-              <div style={{ color: "#e5e5e5", marginTop: "6px", fontSize: "13px" }}>
+              <div style={{ color: "#ECE8E1", marginTop: "6px", fontSize: "13px" }}>
                 {evaluation.user_query}
               </div>
             </div>
@@ -242,7 +242,7 @@ export function EvaluationPanel() {
               style={{ background: "transparent" }}
             />
             {!isDesktop && (
-              <Text style={{ color: "#6b7280", fontSize: "12px" }}>
+              <Text style={{ color: "#78716C", fontSize: "12px" }}>
                 Tip: expand steps for ranking details.
               </Text>
             )}

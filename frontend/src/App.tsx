@@ -42,9 +42,9 @@ function PanelFallback({ height = 180, label }: PanelFallbackProps) {
   return (
     <div
       style={{
-        background: "#0d0d12",
-        borderRadius: "12px",
-        border: "1px solid #1f2937",
+        background: "#1A1918",
+        borderRadius: "14px",
+        border: "1px solid #2E2B28",
         minHeight: typeof height === "number" ? `${height}px` : height,
         opacity: 0.5,
         display: "flex",
@@ -52,7 +52,7 @@ function PanelFallback({ height = 180, label }: PanelFallbackProps) {
         justifyContent: "center",
       }}
     >
-      <span style={{ color: "#6b7280", fontSize: "13px" }}>{label}</span>
+      <span style={{ color: "#78716C", fontSize: "13px" }}>{label}</span>
     </div>
   );
 }
@@ -200,7 +200,7 @@ export default function App() {
       <Layout
         style={{
           minHeight: "100vh",
-          background: "#050507",
+          background: "#111110",
           position: "relative",
         }}
       >
@@ -210,7 +210,7 @@ export default function App() {
             position: "fixed",
             inset: 0,
             background:
-              "radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 212, 255, 0.05), transparent)",
+              "radial-gradient(ellipse 80% 50% at 50% -20%, rgba(212, 145, 92, 0.04), transparent)",
             pointerEvents: "none",
             zIndex: 0,
           }}
@@ -273,7 +273,7 @@ export default function App() {
                         margin: 0,
                         fontSize: isDesktop ? "22px" : "18px",
                         fontWeight: 600,
-                        background: "linear-gradient(135deg, #00d4ff 0%, #3b82f6 100%)",
+                        background: "linear-gradient(135deg, #D4915C 0%, #E8A96B 100%)",
                         WebkitBackgroundClip: "text",
                         WebkitTextFillColor: "transparent",
                         backgroundClip: "text",
@@ -285,7 +285,7 @@ export default function App() {
                       style={{
                         margin: "4px 0 0",
                         fontSize: "13px",
-                        color: "#6b7280",
+                        color: "#78716C",
                       }}
                     >
                       Session: {sessionId?.slice(0, 8)}…
@@ -362,8 +362,8 @@ export default function App() {
                       style={{
                         width: "2px",
                         borderRadius: "999px",
-                        background: isResizingLeft ? "rgba(0, 212, 255, 0.7)" : "rgba(31, 41, 55, 0.9)",
-                        boxShadow: isResizingLeft ? "0 0 12px rgba(0, 212, 255, 0.35)" : "none",
+                        background: isResizingLeft ? "rgba(212, 145, 92, 0.55)" : "rgba(46, 43, 40, 0.9)",
+                        boxShadow: isResizingLeft ? "0 0 10px rgba(212, 145, 92, 0.2)" : "none",
                         transition: "background 120ms ease, box-shadow 120ms ease",
                       }}
                     />
@@ -394,17 +394,17 @@ export default function App() {
                         fallback={
                           <div
                             style={{
-                              background: "#0d0d12",
-                              borderRadius: "12px",
+                              background: "#1A1918",
+                              borderRadius: "14px",
                               height: "100%",
                               opacity: 0.5,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              border: "1px solid #1f2937",
+                              border: "1px solid #2E2B28",
                             }}
                           >
-                            <span style={{ color: "#6b7280", fontSize: "13px" }}>Loading…</span>
+                            <span style={{ color: "#78716C", fontSize: "13px" }}>Loading…</span>
                           </div>
                         }
                       >
@@ -421,8 +421,8 @@ export default function App() {
                       onClose={closeRightPanel}
                       closable={false}
                       styles={{
-                        body: { padding: 0, background: "rgba(5, 5, 7, 0.8)" },
-                        content: { background: "rgba(5, 5, 7, 0.8)" },
+                        body: { padding: 0, background: "rgba(17, 17, 16, 0.85)" },
+                        content: { background: "rgba(17, 17, 16, 0.85)" },
                         mask: { background: "rgba(0, 0, 0, 0.5)" },
                       }}
                     >
@@ -430,18 +430,18 @@ export default function App() {
                         fallback={
                           <div
                             style={{
-                              background: "#0d0d12",
-                              borderRadius: "12px",
+                              background: "#1A1918",
+                              borderRadius: "14px",
                               height: "100%",
                               opacity: 0.5,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              border: "1px solid #1f2937",
+                              border: "1px solid #2E2B28",
                               margin: "16px",
                             }}
                           >
-                            <span style={{ color: "#6b7280", fontSize: "13px" }}>Loading…</span>
+                            <span style={{ color: "#78716C", fontSize: "13px" }}>Loading…</span>
                           </div>
                         }
                       >
@@ -466,10 +466,10 @@ export default function App() {
                 >
                   <div
                     style={{
-                      background: "#0d0d12",
-                      borderRadius: "12px",
+                      background: "#1A1918",
+                      borderRadius: "14px",
                       overflow: "hidden",
-                      border: "1px solid #1f2937",
+                      border: "1px solid #2E2B28",
                     }}
                   >
                     <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -494,17 +494,17 @@ export default function App() {
                         fallback={
                           <div
                             style={{
-                              background: "#0d0d12",
-                              borderRadius: "12px",
+                              background: "#1A1918",
+                              borderRadius: "14px",
                               height: "360px",
                               opacity: 0.5,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              border: "1px solid #1f2937",
+                              border: "1px solid #2E2B28",
                             }}
                           >
-                            <span style={{ color: "#6b7280", fontSize: "13px" }}>Loading…</span>
+                            <span style={{ color: "#78716C", fontSize: "13px" }}>Loading…</span>
                           </div>
                         }
                       >

@@ -2,14 +2,15 @@ import { useEffect, useRef } from "react";
 import { Typography } from "antd";
 import { CodeOutlined } from "@ant-design/icons";
 import { useErrStore } from "@/lib/store";
+import { themeTokens } from "@/theme";
 
 const { Text } = Typography;
 
 const statusConfig: Record<string, { color: string; bg: string }> = {
-  idle: { color: "#6b7280", bg: "rgba(107, 114, 128, 0.15)" },
-  processing: { color: "#f59e0b", bg: "rgba(245, 158, 11, 0.15)" },
-  ready: { color: "#22c55e", bg: "rgba(34, 197, 94, 0.15)" },
-  error: { color: "#ef4444", bg: "rgba(239, 68, 68, 0.15)" },
+  idle: { color: themeTokens.textTertiary, bg: "rgba(140, 133, 128, 0.12)" },
+  processing: { color: themeTokens.colorWarning, bg: "rgba(232, 184, 75, 0.12)" },
+  ready: { color: themeTokens.colorSuccess, bg: "rgba(107, 191, 122, 0.12)" },
+  error: { color: themeTokens.colorError, bg: "rgba(217, 107, 107, 0.12)" },
 };
 
 /**
@@ -60,7 +61,7 @@ export function TerminalWindow() {
       style={{
         padding: 0,
         overflow: "hidden",
-        border: "1px solid #1f2937",
+        border: `1px solid ${themeTokens.border}`,
       }}
     >
       {/* Title bar - macOS style */}
@@ -69,8 +70,8 @@ export function TerminalWindow() {
           display: "flex",
           alignItems: "center",
           padding: "12px 16px",
-          background: "rgba(20, 20, 26, 0.8)",
-          borderBottom: "1px solid #1f2937",
+          background: "rgba(26, 25, 24, 0.8)",
+          borderBottom: `1px solid ${themeTokens.border}`,
         }}
       >
         {/* Traffic lights */}
@@ -79,8 +80,8 @@ export function TerminalWindow() {
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#febc2e" }} />
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#28c840" }} />
         </div>
-        <CodeOutlined style={{ color: "#00d4ff", fontSize: "14px", marginRight: 8 }} />
-        <Text style={{ color: "#9ca3af", fontSize: 12, flex: 1 }}>Session Logs</Text>
+        <CodeOutlined style={{ color: themeTokens.accentPrimary, fontSize: "14px", marginRight: 8 }} />
+        <Text style={{ color: themeTokens.textSecondary, fontSize: 12, flex: 1 }}>Session Logs</Text>
         <span
           className="badge"
           style={{
@@ -108,18 +109,18 @@ export function TerminalWindow() {
           padding: "14px 16px",
           fontSize: "12px",
           lineHeight: "1.7",
-          color: "#9ca3af",
-          background: "rgba(5, 5, 7, 0.5)",
+          color: themeTokens.textSecondary,
+          background: "rgba(17, 17, 16, 0.5)",
         }}
       >
         {!sessionId ? (
-          <Text style={{ color: "#6b7280" }}>Upload a document to start...</Text>
+          <Text style={{ color: themeTokens.textTertiary }}>Upload a document to start...</Text>
         ) : logs.length === 0 ? (
-          <Text style={{ color: "#6b7280" }}>Waiting for logs...</Text>
+          <Text style={{ color: themeTokens.textTertiary }}>Waiting for logs...</Text>
         ) : (
           logs.map((l, idx) => (
-            <div key={idx} style={{ color: l.includes("ERROR") ? "#ef4444" : "#9ca3af", marginBottom: "2px" }}>
-              <span style={{ color: "#6b7280" }}>$</span> {l}
+            <div key={idx} style={{ color: l.includes("ERROR") ? themeTokens.colorError : themeTokens.textSecondary, marginBottom: "2px" }}>
+              <span style={{ color: themeTokens.textTertiary }}>$</span> {l}
             </div>
           ))
         )}

@@ -1,6 +1,7 @@
 import { Button, Typography } from "antd";
 import { CloseOutlined, FileTextOutlined } from "@ant-design/icons";
 import { useErrStore } from "@/lib/store";
+import { themeTokens } from "@/theme";
 
 const { Text } = Typography;
 
@@ -24,8 +25,8 @@ export function DocumentPanel() {
         height: isDesktop ? "calc(100vh - 120px)" : "auto",
         display: "flex",
         flexDirection: "column",
-        border: "1px solid #1f2937",
-        background: "rgba(13, 13, 18, 0.7)",
+        border: `1px solid ${themeTokens.border}`,
+        background: themeTokens.surfaceContainerSolid,
         backdropFilter: "blur(12px)",
       }}
     >
@@ -36,20 +37,20 @@ export function DocumentPanel() {
           justifyContent: "space-between",
           alignItems: "center",
           padding: "16px 20px",
-          borderBottom: "1px solid #1f2937",
-          background: "rgba(20, 20, 26, 0.5)",
+          borderBottom: `1px solid ${themeTokens.border}`,
+          background: themeTokens.surfaceContainer,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <FileTextOutlined style={{ color: "#00d4ff", fontSize: "14px" }} />
-          <Text strong style={{ color: "#e5e5e5", fontSize: "14px" }}>Document</Text>
+          <FileTextOutlined style={{ color: themeTokens.accentPrimary, fontSize: "14px" }} />
+          <Text strong style={{ color: themeTokens.textPrimary, fontSize: "14px" }}>Document</Text>
         </div>
         <Button
           type="text"
           icon={<CloseOutlined />}
           onClick={closeRightPanel}
           size="small"
-          style={{ color: "#9ca3af" }}
+          style={{ color: themeTokens.textSecondary }}
         />
       </div>
 
@@ -67,8 +68,8 @@ export function DocumentPanel() {
               gap: "12px",
             }}
           >
-            <FileTextOutlined style={{ fontSize: "32px", color: "#3a3a3c" }} />
-            <Text style={{ color: "#6b7280", fontSize: "13px", textAlign: "center" }}>
+            <FileTextOutlined style={{ fontSize: "32px", color: themeTokens.borderQuaternary }} />
+            <Text style={{ color: themeTokens.textTertiary, fontSize: "13px", textAlign: "center" }}>
               Click a citation to view context.
             </Text>
           </div>
@@ -79,10 +80,10 @@ export function DocumentPanel() {
               <div
                 style={{
                   padding: "14px",
-                  background: "rgba(20, 20, 26, 0.5)",
-                  borderRadius: "10px",
-                  border: "1px solid #1f2937",
-                  color: "#6b7280",
+                  background: themeTokens.surfaceContainer,
+                  borderRadius: "12px",
+                  border: `1px solid ${themeTokens.border}`,
+                  color: themeTokens.textTertiary,
                   fontSize: "13px",
                   lineHeight: "1.7",
                 }}
@@ -90,7 +91,7 @@ export function DocumentPanel() {
                 <Text
                   style={{
                     display: "block",
-                    color: "#6b7280",
+                    color: themeTokens.textTertiary,
                     fontSize: "10px",
                     fontWeight: 500,
                     marginBottom: "8px",
@@ -108,16 +109,16 @@ export function DocumentPanel() {
             <div
               style={{
                 padding: "16px",
-                background: "rgba(0, 212, 255, 0.08)",
-                border: "1px solid rgba(0, 212, 255, 0.25)",
-                borderRadius: "10px",
-                boxShadow: "0 0 20px rgba(0, 212, 255, 0.1)",
+                background: themeTokens.surfaceAccentSubtle,
+                border: "1px solid rgba(212, 145, 92, 0.2)",
+                borderRadius: "12px",
+                boxShadow: "0 0 20px rgba(212, 145, 92, 0.08)",
               }}
             >
               <Text
                 style={{
                   display: "block",
-                  color: "#00d4ff",
+                  color: themeTokens.accentPrimary,
                   fontSize: "11px",
                   fontWeight: 600,
                   marginBottom: "10px",
@@ -127,7 +128,7 @@ export function DocumentPanel() {
               >
                 Retrieved Passage
               </Text>
-              <div style={{ color: "#e5e5e5", fontSize: "14px", lineHeight: "1.7" }}>
+              <div style={{ color: themeTokens.textPrimary, fontSize: "14px", lineHeight: "1.7" }}>
                 {activeChunk.content}
               </div>
             </div>
@@ -137,10 +138,10 @@ export function DocumentPanel() {
               <div
                 style={{
                   padding: "14px",
-                  background: "rgba(20, 20, 26, 0.5)",
-                  borderRadius: "10px",
-                  border: "1px solid #1f2937",
-                  color: "#6b7280",
+                  background: themeTokens.surfaceContainer,
+                  borderRadius: "12px",
+                  border: `1px solid ${themeTokens.border}`,
+                  color: themeTokens.textTertiary,
                   fontSize: "13px",
                   lineHeight: "1.7",
                 }}
@@ -148,7 +149,7 @@ export function DocumentPanel() {
                 <Text
                   style={{
                     display: "block",
-                    color: "#6b7280",
+                    color: themeTokens.textTertiary,
                     fontSize: "10px",
                     fontWeight: 500,
                     marginBottom: "8px",
@@ -167,15 +168,15 @@ export function DocumentPanel() {
               <div
                 style={{
                   padding: "12px",
-                  background: "rgba(20, 20, 26, 0.5)",
-                  borderRadius: "8px",
-                  border: "1px solid #1f2937",
+                  background: themeTokens.surfaceContainer,
+                  borderRadius: "10px",
+                  border: `1px solid ${themeTokens.border}`,
                 }}
               >
                 <Text
                   style={{
                     display: "block",
-                    color: "#6b7280",
+                    color: themeTokens.textTertiary,
                     fontSize: "10px",
                     fontWeight: 500,
                     marginBottom: "8px",
@@ -187,8 +188,8 @@ export function DocumentPanel() {
                 </Text>
                 {Object.entries(activeChunk.metadata).map(([key, value]) => (
                   <div key={key} style={{ marginBottom: "4px" }}>
-                    <Text style={{ color: "#6b7280", fontSize: "11px" }}>{key}: </Text>
-                    <Text style={{ color: "#9ca3af", fontSize: "11px" }}>
+                    <Text style={{ color: themeTokens.textTertiary, fontSize: "11px" }}>{key}: </Text>
+                    <Text style={{ color: themeTokens.textSecondary, fontSize: "11px" }}>
                       {String(value)}
                     </Text>
                   </div>

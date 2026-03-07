@@ -1,55 +1,54 @@
 import type { ThemeConfig } from "antd";
 
 /**
- * ERR Theme - "Secure Data Portal" Aesthetic
+ * ERR Theme - "Warm Vault" Aesthetic
  *
- * Design Philosophy: Dark, sophisticated clean-room aesthetic with glowing accents
- * suggesting active monitoring and security. Typography is technical yet refined.
+ * Design Philosophy: Deep, warm dark surfaces with amber/gold accents
+ * suggesting trust, warmth, and privacy. Typography is elegant yet readable.
+ * Replaces the cold cyan/purple "AI wrapper" look with an organic, premium feel.
  */
 export const darkTheme: ThemeConfig = {
   token: {
     // === Color Architecture ===
-    // Primary accent - Electric cyan to blue gradient feel
-    colorPrimary: "#00d4ff",
-    colorLink: "#3b82f6",
-    colorSuccess: "#22c55e",
-    colorWarning: "#f59e0b",
-    colorError: "#ef4444",
-    colorInfo: "#00d4ff",
+    // Primary accent - Warm amber/gold
+    colorPrimary: "#D4915C",
+    colorLink: "#E8A96B",
+    colorSuccess: "#6BBF7A",
+    colorWarning: "#E8B84B",
+    colorError: "#D96B6B",
+    colorInfo: "#D4915C",
 
     // === Background Hierarchy ===
-    // Deepest void black - The canvas
-    colorBgLayout: "#050507",
+    // Deep warm charcoal - The canvas
+    colorBgLayout: "#111110",
     // Elevated surfaces - Panels and cards
-    colorBgContainer: "#0d0d12",
+    colorBgContainer: "#1A1918",
     // Hover/interactive states
-    colorBgElevated: "#14141a",
+    colorBgElevated: "#222120",
     // Spotlight areas
-    colorBgSpotlight: "#1a1a24",
+    colorBgSpotlight: "#2A2827",
 
     // === Text Colors ===
-    // Primary text - Near white for readability
-    colorText: "#e5e5e5",
-    // Secondary text - Muted but clear
-    colorTextSecondary: "#9ca3af",
+    // Primary text - Warm white for readability
+    colorText: "#ECE8E1",
+    // Secondary text - Muted warm gray
+    colorTextSecondary: "#A8A29E",
     // Tertiary text - Subtle labels
-    colorTextTertiary: "#6b7280",
+    colorTextTertiary: "#8C8580",  // Raised from #78716C → WCAG AA ≈5.1:1 on #111110
     // Quaternary - Borders and dividers
-    colorTextQuaternary: "#374151",
+    colorTextQuaternary: "#44403C",
 
     // === Borders ===
-    colorBorder: "#1f2937",
-    colorBorderSecondary: "#14141a",
+    colorBorder: "#2E2B28",
+    colorBorderSecondary: "#1A1918",
 
     // === Shape ===
-    // Slightly more aggressive than Apple style
-    borderRadius: 10,
-    borderRadiusLG: 14,
-    borderRadiusSM: 6,
+    borderRadius: 12,
+    borderRadiusLG: 16,
+    borderRadiusSM: 8,
 
     // === Typography ===
-    // Technical, precise fonts
-    fontFamily: 'IBM Plex Mono, -apple-system, BlinkMacSystemFont, "SF Mono", "Monaco", "Menlo", monospace',
+    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
     fontSize: 14,
     fontWeightStrong: 600,
 
@@ -63,9 +62,9 @@ export const darkTheme: ThemeConfig = {
     marginSM: 12,
 
     // === Shadows ===
-    // Glowing shadows for accent elements
-    boxShadow: "0 0 20px rgba(0, 212, 255, 0.15), 0 4px 12px rgba(0, 0, 0, 0.4)",
-    boxShadowSecondary: "0 0 30px rgba(0, 212, 255, 0.1), 0 8px 24px rgba(0, 0, 0, 0.5)",
+    // Warm ambient shadows
+    boxShadow: "0 4px 24px rgba(0, 0, 0, 0.25), 0 0 12px rgba(212, 145, 92, 0.06)",
+    boxShadowSecondary: "0 8px 32px rgba(0, 0, 0, 0.35), 0 0 20px rgba(212, 145, 92, 0.04)",
 
     // === Motion ===
     motionDurationSlow: "0.4s",
@@ -75,77 +74,76 @@ export const darkTheme: ThemeConfig = {
 
   components: {
     Layout: {
-      bodyBg: "#050507",
-      headerBg: "#0d0d12",
+      bodyBg: "#111110",
+      headerBg: "#1A1918",
     },
 
     Card: {
-      colorBgContainer: "#0d0d12",
-      borderRadiusLG: 14,
-      boxShadow: "0 0 20px rgba(0, 212, 255, 0.08), 0 4px 12px rgba(0, 0, 0, 0.3)",
+      colorBgContainer: "#1A1918",
+      borderRadiusLG: 16,
+      boxShadow: "0 4px 20px rgba(0, 0, 0, 0.2), 0 0 8px rgba(212, 145, 92, 0.04)",
     },
 
     Button: {
-      colorPrimary: "#00d4ff",
-      colorPrimaryHover: "#3b82f6",
-      colorPrimaryActive: "#0891b2",
-      defaultBg: "#14141a",
-      defaultBorderColor: "#1f2937",
-      defaultColor: "#e5e5e5",
-      borderRadius: 8,
-      controlHeight: 38,
+      colorPrimary: "#D4915C",
+      colorPrimaryHover: "#E8A96B",
+      colorPrimaryActive: "#B87A4A",
+      defaultBg: "#222120",
+      defaultBorderColor: "#2E2B28",
+      defaultColor: "#ECE8E1",
+      borderRadius: 10,
+      controlHeight: 40,
       fontWeightStrong: 600,
     },
 
     Input: {
-      colorBgContainer: "#0d0d12",
-      colorBorder: "#1f2937",
-      activeBorderColor: "#00d4ff",
-      hoverBorderColor: "#374151",
-      borderRadius: 8,
-      controlHeight: 42,
-      // Subtle glow on focus
-      boxShadow: "0 0 0 2px rgba(0, 212, 255, 0.1)",
+      colorBgContainer: "#1A1918",
+      colorBorder: "#2E2B28",
+      activeBorderColor: "#D4915C",
+      hoverBorderColor: "#44403C",
+      borderRadius: 10,
+      controlHeight: 44,
+      boxShadow: "0 0 0 2px rgba(212, 145, 92, 0.08)",
     },
 
     Select: {
-      colorBgContainer: "#0d0d12",
-      colorBgElevated: "#14141a",
-      colorBorder: "#1f2937",
-      borderRadius: 8,
-      controlHeight: 38,
+      colorBgContainer: "#1A1918",
+      colorBgElevated: "#222120",
+      colorBorder: "#2E2B28",
+      borderRadius: 10,
+      controlHeight: 40,
     },
 
     Tag: {
-      borderRadiusSM: 4,
+      borderRadiusSM: 6,
     },
 
     Alert: {
-      borderRadiusLG: 10,
+      borderRadiusLG: 12,
     },
 
     Typography: {
-      colorText: "#e5e5e5",
-      colorTextSecondary: "#9ca3af",
-      colorTextDescription: "#6b7280",
+      colorText: "#ECE8E1",
+      colorTextSecondary: "#A8A29E",
+      colorTextDescription: "#8C8580",
     },
 
     Divider: {
-      colorSplit: "#1f2937",
+      colorSplit: "#2E2B28",
     },
 
     Modal: {
-      contentBg: "#0d0d12",
-      headerBg: "#0d0d12",
+      contentBg: "#1A1918",
+      headerBg: "#1A1918",
     },
 
     Tooltip: {
-      colorBgSpotlight: "#1a1a24",
+      colorBgSpotlight: "#2A2827",
     },
 
     Progress: {
-      colorSuccess: "#22c55e",
-      colorInfo: "#00d4ff",
+      colorSuccess: "#6BBF7A",
+      colorInfo: "#D4915C",
     },
   },
 };
@@ -155,13 +153,13 @@ export const darkTheme: ThemeConfig = {
  */
 export const cssVariables = {
   // Gradient definitions
-  gradientPrimary: "linear-gradient(135deg, #00d4ff 0%, #3b82f6 100%)",
-  gradientSecondary: "linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%)",
-  gradientGlow: "linear-gradient(135deg, rgba(0, 212, 255, 0.3) 0%, rgba(59, 130, 246, 0.3) 100%)",
+  gradientPrimary: "linear-gradient(135deg, #D4915C 0%, #E8A96B 100%)",
+  gradientSecondary: "linear-gradient(135deg, #B87A4A 0%, #D4915C 100%)",
+  gradientGlow: "linear-gradient(135deg, rgba(212, 145, 92, 0.2) 0%, rgba(232, 169, 107, 0.2) 100%)",
 
   // Glow intensities
-  glowPrimary: "0 0 24px rgba(0, 212, 255, 0.5)",
-  glowSecondary: "0 0 20px rgba(139, 92, 246, 0.4)",
+  glowPrimary: "0 0 20px rgba(212, 145, 92, 0.35)",
+  glowSecondary: "0 0 16px rgba(184, 122, 74, 0.25)",
 
   // Animation durations
   animFast: "0.15s",
@@ -169,3 +167,47 @@ export const cssVariables = {
   animSlow: "0.4s",
   animSlower: "0.6s",
 };
+
+/**
+ * Central token reference for components.
+ * Importing from here instead of hard-coding hex strings ensures a single
+ * source of truth — changing a value here propagates everywhere.
+ */
+export const themeTokens = {
+  // === Backgrounds ===
+  bgLayout: "#111110",
+  bgContainer: "#1A1918",
+  bgElevated: "#222120",
+  bgSpotlight: "#2A2827",
+
+  // === Text ===
+  textPrimary: "#ECE8E1",
+  textSecondary: "#A8A29E",
+  textTertiary: "#8C8580",   // WCAG AA compliant on bgLayout
+  textOnAccent: "#111110",   // Text placed on amber accent backgrounds
+
+  // === Accent / Brand ===
+  accentPrimary: "#D4915C",
+  accentHover: "#E8A96B",
+  accentActive: "#B87A4A",
+
+  // === Borders ===
+  border: "#2E2B28",
+  borderSecondary: "#1A1918",
+  borderQuaternary: "#44403C",
+
+  // === Semantic ===
+  colorSuccess: "#6BBF7A",
+  colorWarning: "#E8B84B",
+  colorError: "#D96B6B",
+
+  // === Surfaces (rgba helpers) ===
+  surfaceContainer: "rgba(26, 25, 24, 0.5)",
+  surfaceContainerSolid: "rgba(26, 25, 24, 0.7)",
+  surfaceAccentSubtle: "rgba(212, 145, 92, 0.06)",
+  surfaceErrorSubtle: "rgba(217, 107, 107, 0.08)",
+  borderErrorSubtle: "rgba(217, 107, 107, 0.2)",
+
+  // === Gradients ===
+  gradientAccent: "linear-gradient(135deg, #D4915C 0%, #E8A96B 100%)",
+} as const;

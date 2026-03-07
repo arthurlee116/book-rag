@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useMemo } from "react";
+import { useRef, useState, useCallback, useMemo, useEffect } from "react";
 import { Button, Upload, Typography, Alert, Space } from "antd";
 import {
   UploadOutlined,
@@ -7,6 +7,7 @@ import {
   CloudUploadOutlined,
 } from "@ant-design/icons";
 import { useErrStore } from "@/lib/store";
+import { themeTokens } from "@/theme";
 
 const { Text } = Typography;
 
@@ -31,9 +32,16 @@ export function UploadPanel() {
   const logs = useErrStore((s) => s.logs);
 
   const fileRef = useRef<File | null>(null);
+  const isMounted = useRef(true); // P3: unmount guard
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // P3: Prevent state updates on an unmounted component
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
 
   const canUpload = uploadStatus !== "processing";
   const isProcessing = uploadStatus === "processing";
@@ -64,10 +72,17 @@ export function UploadPanel() {
 
     const ensureSessionId = () => {
       if (sessionId) return sessionId;
-      const generated =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      // P2: Always use a cryptographically secure source — crypto.randomUUID if
+      // available, otherwise crypto.getRandomValues() for high-entropy fallback.
+      let generated: string;
+      if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        generated = crypto.randomUUID();
+      } else {
+        // Secure fallback: 128 bits from CSPRNG
+        const buf = new Uint8Array(16);
+        crypto.getRandomValues(buf);
+        generated = Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("-");
+      }
       setSessionId(generated);
       return generated;
     };
@@ -85,16 +100,19 @@ export function UploadPanel() {
 
       if (!resp.ok) {
         const msg = await resp.text();
+        if (!isMounted.current) return; // P3: guard
         setUploadStatus("error");
         setError(msg || `Upload failed (${resp.status})`);
         return;
       }
 
       const data = (await resp.json()) as { session_id: string };
+      if (!isMounted.current) return; // P3: guard
       if (data.session_id && data.session_id !== activeSessionId) {
         setSessionId(data.session_id);
       }
     } catch (err) {
+      if (!isMounted.current) return; // P3: guard
       setUploadStatus("error");
       setError(err instanceof Error ? err.message : "Upload failed");
     }
@@ -154,8 +172,8 @@ export function UploadPanel() {
         overflow: "hidden",
         transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
         ...(isDragging && {
-          borderColor: "#00d4ff",
-          boxShadow: "0 0 24px rgba(0, 212, 255, 0.3)",
+          borderColor: themeTokens.accentPrimary,
+          boxShadow: `0 0 24px rgba(212, 145, 92, 0.2)`,
         }),
       }}
       onDragEnter={handleDragEnter}
@@ -172,17 +190,17 @@ export function UploadPanel() {
             left: 0,
             right: 0,
             height: "3px",
-            background: "rgba(0, 212, 255, 0.1)",
+            background: themeTokens.surfaceAccentSubtle,
             zIndex: 1,
           }}
         >
           <div
             style={{
               height: "100%",
-              background: "linear-gradient(90deg, #00d4ff, #3b82f6)",
+              background: `linear-gradient(90deg, ${themeTokens.accentPrimary}, ${themeTokens.accentHover})`,
               width: `${progress}%`,
               transition: "width 0.3s ease",
-              boxShadow: "0 0 10px rgba(0, 212, 255, 0.5)",
+              boxShadow: `0 0 10px rgba(212, 145, 92, 0.4)`,
             }}
           />
         </div>
@@ -201,18 +219,18 @@ export function UploadPanel() {
           <Text
             strong
             style={{
-              color: "#e5e5e5",
+              color: themeTokens.textPrimary,
               fontSize: "14px",
               display: "flex",
               alignItems: "center",
               gap: "8px",
             }}
           >
-            <CloudUploadOutlined style={{ color: "#00d4ff" }} />
+            <CloudUploadOutlined style={{ color: themeTokens.accentPrimary }} />
             Upload Document
           </Text>
           <div style={{ marginTop: "4px" }}>
-            <Text style={{ color: "#6b7280", fontSize: "12px" }}>
+            <Text style={{ color: themeTokens.textTertiary, fontSize: "12px" }}>
               .txt .md .docx .epub .mobi
             </Text>
           </div>
@@ -223,9 +241,9 @@ export function UploadPanel() {
           size="small"
           disabled={!fileName && !isProcessing}
           style={{
-            background: "#14141a",
-            borderColor: "#1f2937",
-            color: "#9ca3af",
+            background: themeTokens.bgElevated,
+            borderColor: themeTokens.border,
+            color: themeTokens.textSecondary,
           }}
         >
           Clear
@@ -239,11 +257,9 @@ export function UploadPanel() {
         showUploadList={false}
         disabled={!canUpload}
         style={{
-          background: isDragging
-            ? "rgba(0, 212, 255, 0.05)"
-            : "rgba(13, 13, 18, 0.5)",
-          border: `2px dashed ${isDragging ? "#00d4ff" : "#1f2937"}`,
-          borderRadius: "10px",
+          background: isDragging ? "rgba(212, 145, 92, 0.04)" : themeTokens.surfaceContainer,
+          border: `2px dashed ${isDragging ? themeTokens.accentPrimary : themeTokens.border}`,
+          borderRadius: "12px",
           padding: "24px 16px",
           marginBottom: "16px",
         }}
@@ -257,17 +273,17 @@ export function UploadPanel() {
                 justifyContent: "center",
                 gap: "12px",
                 padding: "12px",
-                background: "rgba(0, 212, 255, 0.1)",
-                borderRadius: "8px",
-                border: "1px solid rgba(0, 212, 255, 0.2)",
+                background: themeTokens.surfaceAccentSubtle,
+                borderRadius: "10px",
+                border: `1px solid rgba(212, 145, 92, 0.12)`,
               }}
             >
-              <FileTextOutlined style={{ fontSize: "24px", color: "#00d4ff" }} />
+              <FileTextOutlined style={{ fontSize: "24px", color: themeTokens.accentPrimary }} />
               <div style={{ textAlign: "left" }}>
-                <Text style={{ color: "#e5e5e5", fontSize: "13px", display: "block" }}>
+                <Text style={{ color: themeTokens.textPrimary, fontSize: "13px", display: "block" }}>
                   {fileName}
                 </Text>
-                <Text style={{ color: "#6b7280", fontSize: "11px" }}>
+                <Text style={{ color: themeTokens.textTertiary, fontSize: "11px" }}>
                   {selectedFileSizeKb} KB
                 </Text>
               </div>
@@ -278,12 +294,12 @@ export function UploadPanel() {
                 className="ant-upload-drag-icon"
                 style={{
                   marginBottom: "12px",
-                  color: isDragging ? "#00d4ff" : "#6b7280",
+                  color: isDragging ? themeTokens.accentPrimary : themeTokens.textTertiary,
                 }}
               >
                 <CloudUploadOutlined style={{ fontSize: "36px" }} />
               </p>
-              <Text style={{ color: "#9ca3af", fontSize: "13px" }}>
+              <Text style={{ color: themeTokens.textSecondary, fontSize: "13px" }}>
                 Click or drag file to upload
               </Text>
             </>
@@ -304,10 +320,10 @@ export function UploadPanel() {
             disabled={!canUpload}
             block
             style={{
-              background: "#14141a",
-              borderColor: "#1f2937",
-              color: "#e5e5e5",
-              height: "38px",
+              background: themeTokens.bgElevated,
+              borderColor: themeTokens.border,
+              color: themeTokens.textPrimary,
+              height: "40px",
             }}
           >
             Select File
@@ -319,10 +335,12 @@ export function UploadPanel() {
           onClick={onUpload}
           disabled={!canUpload || !fileName}
           style={{
-            height: "38px",
+            height: "40px",
             minWidth: "100px",
-            background: isProcessing ? undefined : "linear-gradient(135deg, #00d4ff 0%, #3b82f6 100%)",
+            background: isProcessing ? undefined : themeTokens.gradientAccent,
             border: "none",
+            color: themeTokens.textOnAccent,
+            fontWeight: 600,
           }}
         >
           {isProcessing ? "Processing…" : "Upload"}
@@ -336,8 +354,8 @@ export function UploadPanel() {
           message={error}
           style={{
             marginTop: "16px",
-            background: "rgba(239, 68, 68, 0.1)",
-            borderColor: "rgba(239, 68, 68, 0.3)",
+            background: themeTokens.surfaceErrorSubtle,
+            borderColor: themeTokens.borderErrorSubtle,
           }}
           showIcon
         />
@@ -349,9 +367,9 @@ export function UploadPanel() {
           style={{
             marginTop: "12px",
             padding: "10px 12px",
-            background: "rgba(0, 212, 255, 0.05)",
-            border: "1px solid rgba(0, 212, 255, 0.1)",
-            borderRadius: "8px",
+            background: "rgba(212, 145, 92, 0.04)",
+            border: `1px solid rgba(212, 145, 92, 0.08)`,
+            borderRadius: "10px",
             display: "flex",
             alignItems: "center",
             gap: "10px",
@@ -361,7 +379,7 @@ export function UploadPanel() {
             className="status-dot processing"
             style={{ margin: 0 }}
           />
-          <Text style={{ color: "#9ca3af", fontSize: "12px" }}>
+          <Text style={{ color: themeTokens.textSecondary, fontSize: "12px" }}>
             Processing document... {progress}%
           </Text>
         </div>
