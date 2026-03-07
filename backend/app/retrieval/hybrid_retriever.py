@@ -6,10 +6,10 @@ from typing import Any, Literal, Optional
 
 import numpy as np
 
-from .evaluation import RetrievalMetrics
 from ..models.chunk import ChunkModel
+from .evaluation import RetrievalMetrics
 
-
+_FAISS_IMPORT_ERROR: Exception | None
 try:
     import faiss  # type: ignore
 except Exception as e:  # noqa: BLE001
@@ -18,6 +18,7 @@ except Exception as e:  # noqa: BLE001
 else:
     _FAISS_IMPORT_ERROR = None
 
+_JIEBA_IMPORT_ERROR: Exception | None
 try:
     import jieba  # type: ignore
 except Exception as e:  # noqa: BLE001
@@ -26,6 +27,7 @@ except Exception as e:  # noqa: BLE001
 else:
     _JIEBA_IMPORT_ERROR = None
 
+_BM25S_IMPORT_ERROR: Exception | None
 try:
     import bm25s  # type: ignore
 except Exception as e:  # noqa: BLE001
@@ -200,20 +202,18 @@ class HybridRetriever:
 
         if language == "zh":
             if jieba is None:
-                raise RuntimeError(
-                    f"jieba is required for Chinese tokenization. Import error: {_JIEBA_IMPORT_ERROR}"
-                )
+                raise RuntimeError(f"jieba is required for Chinese tokenization. Import error: {_JIEBA_IMPORT_ERROR}")
             tokens = [t.strip() for t in jieba.lcut(text) if t.strip()]
             return tokens
 
         # Lightweight English tokenizer for BM25 hot path.
-        tokens: list[str] = []
+        en_tokens: list[str] = []
         for raw in _EN_TOKEN_RE.findall(text):
             token = _normalize_en_token(raw)
             if not token or token in _EN_STOPWORDS:
                 continue
-            tokens.append(token)
-        return tokens
+            en_tokens.append(token)
+        return en_tokens
 
     def build(
         self,
@@ -229,13 +229,9 @@ class HybridRetriever:
         """
 
         if faiss is None:
-            raise RuntimeError(
-                f"faiss-cpu is required for vector search. Import error: {_FAISS_IMPORT_ERROR}"
-            )
+            raise RuntimeError(f"faiss-cpu is required for vector search. Import error: {_FAISS_IMPORT_ERROR}")
         if bm25s is None:
-            raise RuntimeError(
-                f"bm25s is required for lexical search. Import error: {_BM25S_IMPORT_ERROR}"
-            )
+            raise RuntimeError(f"bm25s is required for lexical search. Import error: {_BM25S_IMPORT_ERROR}")
         if len(chunks) == 0:
             raise ValueError("chunks must be non-empty")
 
@@ -245,9 +241,7 @@ class HybridRetriever:
         if embeddings.shape[0] != len(chunks):
             raise ValueError("embeddings row count must match number of chunks")
         if embeddings.shape[1] != self.embedding_dim:
-            raise ValueError(
-                f"embeddings dim mismatch: expected {self.embedding_dim}, got {embeddings.shape[1]}"
-            )
+            raise ValueError(f"embeddings dim mismatch: expected {self.embedding_dim}, got {embeddings.shape[1]}")
 
         self._chunks = chunks
         self._chunk_id_to_index = {chunk.id: idx for idx, chunk in enumerate(chunks)}
@@ -261,9 +255,7 @@ class HybridRetriever:
         index.add(doc_embeddings)  # type: ignore[arg-type]
 
         # BM25 index.
-        tokenized_corpus = [
-            self._tokenize(c.content, language=self._doc_language) for c in chunks
-        ]
+        tokenized_corpus = [self._tokenize(c.content, language=self._doc_language) for c in chunks]
         bm25 = bm25s.BM25()
         bm25.index(tokenized_corpus, show_progress=False)
 
@@ -302,9 +294,7 @@ class HybridRetriever:
         if cached is not None:
             return cached
         if faiss is None:
-            raise RuntimeError(
-                f"faiss-cpu is required for vector search. Import error: {_FAISS_IMPORT_ERROR}"
-            )
+            raise RuntimeError(f"faiss-cpu is required for vector search. Import error: {_FAISS_IMPORT_ERROR}")
         doc_emb = self._get_mrl_doc_embeddings(search_dim)
         index = faiss.IndexFlatIP(search_dim)
         index.add(doc_emb)  # type: ignore[arg-type]
@@ -347,6 +337,7 @@ class HybridRetriever:
         # MRL: truncate to search_dim if specified.
         use_mrl = search_dim is not None and 0 < int(search_dim) < self.embedding_dim
         if use_mrl:
+            assert search_dim is not None
             search_dim_int = int(search_dim)
             query_emb_search = _l2_normalize(query_embedding[:, :search_dim_int])
             doc_emb_search = self._get_mrl_doc_embeddings(search_dim_int)
@@ -359,19 +350,17 @@ class HybridRetriever:
         # Phase A: Vector candidates.
         n_docs = len(self._chunks)
         effective_candidate_k = (
-            max(1, int(candidate_k_override))
-            if candidate_k_override is not None
-            else self.candidate_k
+            max(1, int(candidate_k_override)) if candidate_k_override is not None else self.candidate_k
         )
         vec_fetch_k = min(max(top_k, effective_candidate_k), n_docs)
 
-        vec_scores_raw, vec_ids = vec_index.search(query_emb_search, vec_fetch_k)
+        vec_scores_raw, vec_ids = vec_index.search(query_emb_search, vec_fetch_k)  # type: ignore
         vec_ids_list = [int(i) for i in vec_ids[0] if int(i) >= 0]
         vec_scores_flat = vec_scores_raw[0][: len(vec_ids_list)]
 
         # Convert cosine [-1, 1] -> [0, 1] (spec expects 0..1).
         vec_scores_map: dict[int, float] = {}
-        for idx, score in zip(vec_ids_list, vec_scores_flat):
+        for idx, score in zip(vec_ids_list, vec_scores_flat, strict=False):
             cos = float(score)
             vec_scores_map[idx] = float(np.clip((cos + 1.0) * 0.5, 0.0, 1.0))
 
@@ -407,7 +396,7 @@ class HybridRetriever:
 
             bm25_norm_map: dict[int, float] = {
                 int(i): norm_bm25(float(s))
-                for i, s in zip(bm25_top_idx.tolist(), bm25_top_scores.tolist())
+                for i, s in zip(bm25_top_idx.tolist(), bm25_top_scores.tolist(), strict=False)
             }
 
             if metrics:
@@ -426,7 +415,7 @@ class HybridRetriever:
                 metrics.add_step("bm25_search", skipped=True, reason="vector_only")
 
         # Phase C: Candidate union and fusion.
-        candidate_ids = set(vec_ids_list) | set(int(i) for i in bm25_top_idx.tolist())
+        candidate_ids = set(vec_ids_list) | {int(i) for i in bm25_top_idx.tolist()}
 
         # Compute vector scores for candidates missing from vector top-k.
         missing_indices = [idx for idx in candidate_ids if idx not in vec_scores_map]
@@ -435,7 +424,7 @@ class HybridRetriever:
             missing_scores = missing_vecs @ query_emb_search.T
             missing_scores_flat = missing_scores.reshape(-1)
 
-            for idx, raw_score in zip(missing_indices, missing_scores_flat):
+            for idx, raw_score in zip(missing_indices, missing_scores_flat, strict=False):
                 cos = float(raw_score)
                 vec_scores_map[idx] = float(np.clip((cos + 1.0) * 0.5, 0.0, 1.0))
 

@@ -20,59 +20,60 @@ from backend.app.models.chunk import ChunkModel
 from backend.app.openrouter_client import ChatMessage
 from backend.app.session_store import SESSIONS, ChatTurn, SessionState
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_chunk(cid: str, content: str = "some content") -> ChunkModel:
     return ChunkModel(id=cid, content=content, rich_content=content)
 
 
 def _make_settings(**overrides) -> SimpleNamespace:
-    defaults = dict(
-        session_ttl_seconds=600,
-        chat_history_max_turns=10,
-        chat_history_max_chars=20_000,
-        chat_model_context_limit_tokens=100_000,
-        chat_model_simple="test-model",
-        chat_model_complex="test-model",
-        embedding_model="test-embed",
-        embedding_query_use_instruction=True,
-        embedding_query_include_raw=True,
-        embedding_query_instruction_template="Instruct: {task}\nQuery: {query}",
-        embedding_query_task=(
+    defaults = {
+        "session_ttl_seconds": 600,
+        "chat_history_max_turns": 10,
+        "chat_history_max_chars": 20_000,
+        "chat_model_context_limit_tokens": 100_000,
+        "chat_model_simple": "test-model",
+        "chat_model_complex": "test-model",
+        "embedding_model": "test-embed",
+        "embedding_query_use_instruction": True,
+        "embedding_query_include_raw": True,
+        "embedding_query_instruction_template": "Instruct: {task}\nQuery: {query}",
+        "embedding_query_task": (
             "Given a question, retrieve relevant passages from the document that explicitly contain the answer."
         ),
-        embedding_aggregation_decay=0.7,
-        fast_mode_embedding_aggregation_decay=0.7,
-        fast_mode_include_raw_query=False,
-        fast_mode_include_neighbors=False,
-        fast_mode_candidate_k=20,
-        embedding_dim_fast_mode=1024,
-        query_fusion_enabled=True,
-        query_variants_count=6,
-        hyde_enabled=True,
-        hyde_max_words=140,
-        hyde_drift_sim_threshold=0.5,
-        drift_filter_enabled=False,
-        drift_sim_threshold=0.5,
-        query_variants_max=8,
-        fusion_per_query_top_k=20,
-        fusion_max_candidates=30,
-        rrf_k=60,
-        retrieval_parallelism=4,
-        llm_rerank_enabled=False,
-        llm_rerank_candidate_pool=30,
-        llm_rerank_model=None,
-        llm_rerank_max_chars=400,
-        answer_repeat_guard_enabled=True,
-        answer_repeat_answer_similarity_min=0.9,
-        answer_repeat_query_similarity_max=0.6,
-        repack_strategy="reverse",
-        context_include_neighbors=False,
-        fast_mode_language_alignment=False,
-    )
+        "embedding_aggregation_decay": 0.7,
+        "fast_mode_embedding_aggregation_decay": 0.7,
+        "fast_mode_include_raw_query": False,
+        "fast_mode_include_neighbors": False,
+        "fast_mode_candidate_k": 20,
+        "embedding_dim_fast_mode": 1024,
+        "query_fusion_enabled": True,
+        "query_variants_count": 6,
+        "hyde_enabled": True,
+        "hyde_max_words": 140,
+        "hyde_drift_sim_threshold": 0.5,
+        "drift_filter_enabled": False,
+        "drift_sim_threshold": 0.5,
+        "query_variants_max": 8,
+        "fusion_per_query_top_k": 20,
+        "fusion_max_candidates": 30,
+        "rrf_k": 60,
+        "retrieval_parallelism": 4,
+        "llm_rerank_enabled": False,
+        "llm_rerank_candidate_pool": 30,
+        "llm_rerank_model": None,
+        "llm_rerank_max_chars": 400,
+        "answer_repeat_guard_enabled": True,
+        "answer_repeat_answer_similarity_min": 0.9,
+        "answer_repeat_query_similarity_max": 0.6,
+        "repack_strategy": "reverse",
+        "context_include_neighbors": False,
+        "fast_mode_language_alignment": False,
+    }
+
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
 
@@ -87,6 +88,7 @@ class _FakeRetriever:
 
     def search(self, **_kwargs):
         from backend.app.retrieval.hybrid_retriever import ScoredChunk
+
         return [
             ScoredChunk(
                 chunk=c,
@@ -102,7 +104,7 @@ def _make_session(session_id: str, history: list[ChatTurn] | None = None) -> Ses
     s = SessionState(session_id=session_id)
     s.ingest_status = "ready"
     s.doc_language = "en"
-    s.retriever = _FakeRetriever([_make_chunk("c1", "The sky is blue.")])
+    s.retriever = _FakeRetriever([_make_chunk("c1", "The sky is blue.")])  # type: ignore[assignment]
     if history:
         s.chat_history = list(history)
     SESSIONS[session_id] = s
@@ -112,6 +114,7 @@ def _make_session(session_id: str, history: list[ChatTurn] | None = None) -> Ses
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestChatHistoryInjection(unittest.IsolatedAsyncioTestCase):
     """Verifies that history turns are injected as proper role-alternating messages."""
@@ -161,7 +164,7 @@ class TestChatHistoryInjection(unittest.IsolatedAsyncioTestCase):
 
         settings = _make_settings()
         req = ChatRequest(session_id=session_id, message=query, fast_mode=False, top_k=5)
-        await run_chat(req=req, settings=settings, openrouter=openrouter)
+        await run_chat(req=req, settings=settings, openrouter=openrouter)  # type: ignore[arg-type]
         return captured[0]
 
     async def test_no_history_no_extra_assistant_message(self) -> None:
@@ -263,10 +266,10 @@ class TestChatHistoryInjection(unittest.IsolatedAsyncioTestCase):
         )
 
         req1 = ChatRequest(session_id="s6", message="Question A", fast_mode=False, top_k=5)
-        await run_chat(req=req1, settings=settings, openrouter=openrouter)
+        await run_chat(req=req1, settings=settings, openrouter=openrouter)  # type: ignore[arg-type]
 
         req2 = ChatRequest(session_id="s6", message="Question B", fast_mode=False, top_k=5)
-        await run_chat(req=req2, settings=settings, openrouter=openrouter)
+        await run_chat(req=req2, settings=settings, openrouter=openrouter)  # type: ignore[arg-type]
 
         self.assertEqual(len(captured), 2)
 
@@ -282,9 +285,7 @@ class TestChatHistoryInjection(unittest.IsolatedAsyncioTestCase):
         # It should only appear as a proper history turn (role=assistant, exact content).
         # The first answer may appear in history, but must NOT be the last assistant message
         # (which would mean it's being presented as the current answer context).
-        last_assistant = next(
-            (m for m in reversed(second_call_messages) if m.role == "assistant"), None
-        )
+        last_assistant = next((m for m in reversed(second_call_messages) if m.role == "assistant"), None)
         if last_assistant is not None:
             # Last assistant message should be the history turn, not a CONTEXT block
             self.assertNotIn("CONTEXT:", last_assistant.content)
@@ -331,7 +332,7 @@ class TestChatHistoryInjection(unittest.IsolatedAsyncioTestCase):
         )
 
         req = ChatRequest(session_id="s7", message="书中 guyland 里边人的平均年龄。", fast_mode=False, top_k=5)
-        resp = await run_chat(req=req, settings=_make_settings(), openrouter=openrouter)
+        resp = await run_chat(req=req, settings=_make_settings(), openrouter=openrouter)  # type: ignore[arg-type]
 
         self.assertEqual(len(captured), 2)
         self.assertEqual(resp.answer, "Guyland 的年龄范围是 15 到 24 岁 [1]")

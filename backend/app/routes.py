@@ -140,9 +140,8 @@ async def clear_chat(
     await session.clear_chat_data()
     return {"status": "cleared"}
 
-def _rewrite_local_citations_to_global(
-    *, answer: str, local_citations: list[dict], global_map: dict[str, int]
-) -> str:
+
+def _rewrite_local_citations_to_global(*, answer: str, local_citations: list[dict], global_map: dict[str, int]) -> str:
     """
     Convert local [n] citations (index into local_citations) into stable global references.
     local_citations are dicts with at least {"id": "..."}.

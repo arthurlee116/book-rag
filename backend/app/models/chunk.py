@@ -12,4 +12,3 @@ class ChunkModel(BaseModel):
     prev_content: str | None = None  # Text of the previous chunk (for context)
     next_content: str | None = None  # Text of the next chunk (for context)
     metadata: dict[str, Any] = Field(default_factory=dict)
-

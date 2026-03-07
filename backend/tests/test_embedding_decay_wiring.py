@@ -24,11 +24,13 @@ class TestEmbeddingAggregationDecayWiring(unittest.TestCase):
             if isinstance(func, ast.Name) and func.id == "_weighted_embedding_mean":
                 decay_kw = next((kw for kw in node.keywords if kw.arg == "decay"), None)
                 self.assertIsNotNone(decay_kw, "_weighted_embedding_mean must be called with decay=")
+                assert decay_kw is not None
                 self.assertIsInstance(
                     decay_kw.value,
                     ast.Name,
                     "decay should be passed via a local variable to avoid duplicating settings access",
                 )
+                assert isinstance(decay_kw.value, ast.Name)
                 decay_var_names.append(decay_kw.value.id)
 
         self.assertGreaterEqual(

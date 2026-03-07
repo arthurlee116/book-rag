@@ -48,4 +48,3 @@ def rrf_fuse(
     if max_results is not None:
         return fused[: max(0, int(max_results))]
     return fused
-

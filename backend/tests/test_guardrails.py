@@ -1,6 +1,10 @@
 import unittest
 
-from backend.app.guardrails import STRICT_NO_MENTION, enforce_strict_rag_answer, extract_citation_numbers
+from backend.app.guardrails import (
+    STRICT_NO_MENTION,
+    enforce_strict_rag_answer,
+    extract_citation_numbers,
+)
 
 
 class TestGuardrails(unittest.TestCase):
@@ -36,4 +40,3 @@ class TestGuardrails(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -1,7 +1,10 @@
-import unittest
 import os
+import unittest
+
 from fastapi.testclient import TestClient
+
 from backend.app.main import app
+
 
 class TestEvaluationEndpoint(unittest.TestCase):
     def setUp(self):
@@ -24,6 +27,7 @@ class TestEvaluationEndpoint(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertIn("No evaluation record", response.json()["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()

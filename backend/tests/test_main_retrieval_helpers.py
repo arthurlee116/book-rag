@@ -3,9 +3,9 @@ from datetime import datetime
 from types import SimpleNamespace
 
 from backend.app.chat_pipeline import (
-    _decide_language_alignment,
     _align_query_for_retrieval,
     _build_normal_mode_query_expansions,
+    _decide_language_alignment,
 )
 from backend.app.openrouter_client import OpenRouterError
 from backend.app.retrieval.evaluation import RetrievalMetrics
@@ -31,9 +31,7 @@ class _FakeOpenRouter:
         self.calls.append("variants")
         return [f"{query}-v1", f"{query}-v2"]
 
-    async def generate_hyde_passage(
-        self, *, query: str, doc_language: str, max_words: int
-    ) -> str:
+    async def generate_hyde_passage(self, *, query: str, doc_language: str, max_words: int) -> str:
         self.calls.append("hyde")
         return f"hyde-{query}-{doc_language}-{max_words}"
 
@@ -51,7 +49,7 @@ class TestMainRetrievalHelpers(unittest.IsolatedAsyncioTestCase):
         )
 
         should_align, reason = _decide_language_alignment(
-            settings=settings,
+            settings=settings,  # type: ignore[arg-type]
             user_query="What is this about?",
             doc_language="en",
             fast_mode=False,
@@ -72,7 +70,7 @@ class TestMainRetrievalHelpers(unittest.IsolatedAsyncioTestCase):
 
         aligned = await _align_query_for_retrieval(
             session=session,
-            openrouter=router,
+            openrouter=router,  # type: ignore[arg-type]
             user_query="hello",
             doc_language="en",
             should_align=True,
@@ -99,8 +97,8 @@ class TestMainRetrievalHelpers(unittest.IsolatedAsyncioTestCase):
 
         query_texts, hyde_text = await _build_normal_mode_query_expansions(
             session=session,
-            openrouter=router,
-            settings=settings,
+            openrouter=router,  # type: ignore[arg-type]
+            settings=settings,  # type: ignore[arg-type]
             base_query="base",
             user_query="user",
             doc_language="en",

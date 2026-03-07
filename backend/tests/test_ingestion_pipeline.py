@@ -64,7 +64,7 @@ class TestIngestionPipeline(unittest.IsolatedAsyncioTestCase):
                 filename="x.txt",
                 content=b"hello",
                 settings=settings,
-                openrouter=_DummyOpenRouter(),
+                openrouter=_DummyOpenRouter(),  # type: ignore[arg-type]
             )
 
         session = SESSIONS[session_id]
@@ -118,7 +118,7 @@ class TestIngestionPipeline(unittest.IsolatedAsyncioTestCase):
                     filename="first.txt",
                     content=b"first",
                     settings=settings,
-                    openrouter=_RaceOpenRouter(),
+                    openrouter=_RaceOpenRouter(),  # type: ignore[arg-type]
                     ingest_generation=1,
                 )
             )
@@ -131,7 +131,7 @@ class TestIngestionPipeline(unittest.IsolatedAsyncioTestCase):
                     filename="second.txt",
                     content=b"second",
                     settings=settings,
-                    openrouter=_RaceOpenRouter(),
+                    openrouter=_RaceOpenRouter(),  # type: ignore[arg-type]
                     ingest_generation=2,
                 )
             )

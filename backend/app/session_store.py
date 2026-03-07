@@ -4,11 +4,11 @@ import asyncio
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, Optional
-from .retrieval.evaluation import EvaluationRecord
+from typing import Optional
 
 from .models.chunk import ChunkModel
-from .retrieval.hybrid_retriever import HybridRetriever, ScoredChunk
+from .retrieval.evaluation import EvaluationRecord
+from .retrieval.hybrid_retriever import HybridRetriever
 
 
 @dataclass
@@ -85,6 +85,7 @@ class SessionState:
             self.latest_evaluation = None
             self.reference_ids.clear()
             self.references.clear()
+
 
 # Global in-memory session store (ephemeral; cleared on process restart)
 SESSIONS: dict[str, SessionState] = {}

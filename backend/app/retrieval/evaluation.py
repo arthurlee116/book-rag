@@ -5,22 +5,28 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+
 class RetrievalStep(BaseModel):
     """Base model for a single retrieval step."""
+
     name: str
     skipped: bool = False
     reason: Optional[str] = None
     data: Optional[Dict[str, Any]] = None
 
+
 class ChunkPreview(BaseModel):
     """Preview for final context chunks."""
+
     chunk_id: str
     rank: int
     score: float
     preview: str = Field(..., max_length=200)
 
+
 class EvaluationRecord(BaseModel):
     """Full evaluation record for a chat query."""
+
     session_id: str
     user_query: str
     mode: str  # "normal" or "fast"
@@ -28,9 +34,11 @@ class EvaluationRecord(BaseModel):
     steps: List[RetrievalStep] = Field(default_factory=list)
     final_context: List[ChunkPreview] = Field(default_factory=list)
 
+
 @dataclass
 class RetrievalMetrics:
     """Mutable collector for retrieval metrics during pipeline execution."""
+
     session_id: str
     user_query: str
     mode: str
@@ -60,17 +68,21 @@ class RetrievalMetrics:
         with self._lock:
             steps_snapshot = list(self.steps)
 
-        pyd_steps = [
-            RetrievalStep(**step) for step in steps_snapshot
-        ]
+        pyd_steps = [RetrievalStep(**step) for step in steps_snapshot]
         # Extract final_context from the last "final_context" step
         final_chunks = []
         for step in reversed(steps_snapshot):
             if step.get("name") == "final_context":
                 raw_chunks = step.get("data", {}).get("chunks", [])
                 final_chunks = [
-                    ChunkPreview(chunk_id=c["chunk_id"], rank=c["rank"], score=c["score"], preview=c["preview"])
-                    for c in raw_chunks if isinstance(c, dict) and all(k in c for k in ["chunk_id", "rank", "score", "preview"])
+                    ChunkPreview(
+                        chunk_id=c["chunk_id"],
+                        rank=c["rank"],
+                        score=c["score"],
+                        preview=c["preview"],
+                    )
+                    for c in raw_chunks
+                    if isinstance(c, dict) and all(k in c for k in ["chunk_id", "rank", "score", "preview"])
                 ]
                 break
         return EvaluationRecord(
@@ -79,5 +91,5 @@ class RetrievalMetrics:
             mode=self.mode,
             timestamp=timestamp,
             steps=pyd_steps,
-            final_context=final_chunks
+            final_context=final_chunks,
         )

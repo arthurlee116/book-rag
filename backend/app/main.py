@@ -16,9 +16,7 @@ async def _cleanup_loop(settings: Settings, shutdown_event: asyncio.Event) -> No
     while not shutdown_event.is_set():
         cleanup_expired_sessions()
         try:
-            await asyncio.wait_for(
-                shutdown_event.wait(), timeout=settings.session_cleanup_interval_seconds
-            )
+            await asyncio.wait_for(shutdown_event.wait(), timeout=settings.session_cleanup_interval_seconds)
         except TimeoutError:
             continue
 

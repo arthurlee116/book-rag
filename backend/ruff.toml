@@ -1,0 +1,16 @@
+line-length = 120
+
+[lint]
+# 检查规则集：错误(E)、警告(W)、未使用导入(F)、bugbear(B)、import排序(I)、命名(N)、代码简化(C4)
+select = ["E", "F", "W", "B", "I", "C4", "N"]
+
+ignore = [
+    # FastAPI 的 Depends/File 在参数默认值中是官方推荐用法，不是错误
+    "B008",
+    # 函数复杂度属于架构设计问题，不是语法错误
+    "C901",
+]
+
+[lint.per-file-ignores]
+# 测试文件中允许更宽松的函数命名（测试函数名通常更长）
+"tests/**" = ["N802", "N803"]

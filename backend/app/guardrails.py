@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-
 STRICT_NO_MENTION = "The document does not mention this."
 
 
@@ -72,4 +71,3 @@ def enforce_strict_rag_answer(
         )
 
     return GuardrailResult(ok=True, answer=raw)
-

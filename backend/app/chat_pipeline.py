@@ -1,21 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import datetime
 from difflib import SequenceMatcher
-import re
 from typing import cast
 
-from fastapi import HTTPException
 import numpy as np
+from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from .config import Settings
 from .guardrails import STRICT_NO_MENTION, enforce_strict_rag_answer
 from .ingestion.chunker import estimate_tokens
 from .models.chunk import ChunkModel
-from .openrouter_client import ChatMessage
-from .openrouter_client import OpenRouterClient, OpenRouterError
+from .openrouter_client import ChatMessage, OpenRouterClient, OpenRouterError
 from .repacking import apply_repack_strategy
 from .retrieval.evaluation import RetrievalMetrics
 from .retrieval.fusion import dedupe_keep_order, rrf_fuse
@@ -97,11 +96,7 @@ def _build_embedding_query_inputs(
                 # Fallback: if template is invalid, still provide something reasonable.
                 inputs.append(f"Instruct: {task}\nQuery: {q}")
 
-    include_raw = (
-        settings.embedding_query_include_raw
-        if include_raw_override is None
-        else bool(include_raw_override)
-    )
+    include_raw = settings.embedding_query_include_raw if include_raw_override is None else bool(include_raw_override)
     if include_raw or not inputs:
         inputs.extend(queries)
 
@@ -235,9 +230,8 @@ def _looks_like_repeated_answer(
         curr_answer,
         _normalize_similarity_text(prev_assistant),
     )
-    return (
-        answer_sim >= float(settings.answer_repeat_answer_similarity_min)
-        and query_sim <= float(settings.answer_repeat_query_similarity_max)
+    return answer_sim >= float(settings.answer_repeat_answer_similarity_min) and query_sim <= float(
+        settings.answer_repeat_query_similarity_max
     )
 
 
@@ -294,9 +288,7 @@ async def _align_query_for_retrieval(
             query=user_query, doc_language=str(doc_language)
         )
     except OpenRouterError as e:
-        await session.log(
-            f"[LOG] WARNING: language alignment failed ({e}); using original query."
-        )
+        await session.log(f"[LOG] WARNING: language alignment failed ({e}); using original query.")
         metrics.add_step(
             "language_alignment",
             skipped=True,
@@ -353,7 +345,7 @@ async def _build_normal_mode_query_expansions(
     if tasks:
         task_names = list(tasks.keys())
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
-        for name, result in zip(task_names, results):
+        for name, result in zip(task_names, results, strict=False):
             if isinstance(result, Exception):
                 await session.log(f"[LOG] WARNING: {name} generation failed: {result}")
                 continue
@@ -382,9 +374,7 @@ async def run_chat(
 
     async with session.lock:
         if session.ingest_status != "ready" or session.retriever is None:
-            raise HTTPException(
-                status_code=400, detail="No active document. Upload and wait until Ready."
-            )
+            raise HTTPException(status_code=400, detail="No active document. Upload and wait until Ready.")
         retriever = session.retriever
         doc_language = session.doc_language or retriever.doc_language or "en"
 
@@ -421,6 +411,8 @@ async def run_chat(
             None,
             lambda: retriever.search(**kwargs),
         )
+
+    embed_inputs: list[str] = []
 
     if req.fast_mode:
         await session.log("[LOG] Chat: fast mode enabled -> baseline retrieval.")
@@ -480,14 +472,16 @@ async def run_chat(
 
         # Embed all query texts (and optional HyDE) in one call.
         await session.log("[LOG] Chat: embedding query variants (instruction-aware)...")
-        embed_inputs: list[str] = []
+        embed_inputs = []
         slices: dict[str, slice] = {}
         for q in query_texts:
             # Normal mode: instruction-wrapped embeddings are sufficient for
             # instruction-aware models like Qwen3-Embedding; skip raw duplicates
             # to halve the embedding API token cost.
             inputs_for_q = _build_embedding_query_inputs(
-                settings=settings, queries=[q], include_raw_override=False,
+                settings=settings,
+                queries=[q],
+                include_raw_override=False,
             )
             if not inputs_for_q:
                 continue
@@ -565,13 +559,9 @@ async def run_chat(
                 use_hyde = True
             else:
                 sim_hyde = cosine(base_vec, cast(np.ndarray, hyde_vec))
-                use_hyde = (not settings.drift_filter_enabled) or (
-                    sim_hyde >= settings.hyde_drift_sim_threshold
-                )
+                use_hyde = (not settings.drift_filter_enabled) or (sim_hyde >= settings.hyde_drift_sim_threshold)
 
-        await session.log(
-            f"[LOG] Chat: fusion queries={len(query_texts)} hyde={'on' if use_hyde else 'off'}"
-        )
+        await session.log(f"[LOG] Chat: fusion queries={len(query_texts)} hyde={'on' if use_hyde else 'off'}")
 
         # Retrieve per query, then fuse with RRF (robust to score calibration).
         await session.log("[LOG] Chat: retrieval (multi-query + RRF fusion)...")
@@ -585,7 +575,7 @@ async def run_chat(
             # Only base_query runs BM25; variants share highly overlapping
             # keywords so repeated BM25 passes yield diminishing returns
             # while adding tokenization overhead (especially jieba for zh).
-            is_base = (q == base_query)
+            is_base = q == base_query
             retrieval_jobs.append((q, v, q if is_base else None, is_base))
 
         if use_hyde and hyde_vec is not None:
@@ -620,19 +610,14 @@ async def run_chat(
 
         if retrieval_jobs:
             retrieval_results = await asyncio.gather(
-                *[
-                    _run_retrieval(q, emb, expanded, bm25_enabled)
-                    for q, emb, expanded, bm25_enabled in retrieval_jobs
-                ]
+                *[_run_retrieval(q, emb, expanded, bm25_enabled) for q, emb, expanded, bm25_enabled in retrieval_jobs]
             )
             for ranking_ids, local_map in retrieval_results:
                 if ranking_ids:
                     rankings.append(ranking_ids)
                 id_to_chunk.update(local_map)
 
-        fused_ids = rrf_fuse(
-            rankings, k=settings.rrf_k, max_results=settings.fusion_max_candidates
-        )
+        fused_ids = rrf_fuse(rankings, k=settings.rrf_k, max_results=settings.fusion_max_candidates)
         metrics.add_step(
             "rrf_fusion",
             data={
@@ -711,9 +696,7 @@ async def run_chat(
     elif repack_strategy == "reverse":
         await session.log("[LOG] Chat: re-pack strategy 'reverse' -> reversing order.")
     else:
-        await session.log(
-            f"[LOG] WARNING: unknown ERR_REPACK_STRATEGY='{repack_strategy}', defaulting to 'reverse'."
-        )
+        await session.log(f"[LOG] WARNING: unknown ERR_REPACK_STRATEGY='{repack_strategy}', defaulting to 'reverse'.")
         repack_strategy = "reverse"
 
     retrieved_chunks = apply_repack_strategy(retrieved_chunks, repack_strategy=repack_strategy)
@@ -744,9 +727,7 @@ async def run_chat(
     metrics.add_step("final_context", data={"chunks": final_chunks_data})
 
     include_neighbors = (
-        bool(settings.fast_mode_include_neighbors)
-        if req.fast_mode
-        else bool(settings.context_include_neighbors)
+        bool(settings.fast_mode_include_neighbors) if req.fast_mode else bool(settings.context_include_neighbors)
     )
     context_blocks = _build_context_blocks(
         chunks=retrieved_chunks,
@@ -775,9 +756,7 @@ async def run_chat(
         history_text = "\n".join([f"{t.role}: {t.content}" for t in history_turns])
 
     max_history_chars = max(0, int(settings.chat_history_max_chars))
-    history_text, history_truncated = _trim_history_to_char_window(
-        history_text, max_chars=max_history_chars
-    )
+    history_text, history_truncated = _trim_history_to_char_window(history_text, max_chars=max_history_chars)
     if history_truncated:
         await session.log("[LOG] Chat: trimmed chat history to configured char window.")
         # Re-derive truncated turns from the trimmed text length for message building.
@@ -793,9 +772,7 @@ async def run_chat(
                 break
         history_turns = kept_turns
 
-    prompt_tokens = _estimate_prompt_tokens(
-        text_parts=[system_prompt, history_text, context_text, user_query]
-    )
+    prompt_tokens = _estimate_prompt_tokens(text_parts=[system_prompt, history_text, context_text, user_query])
     if prompt_tokens > settings.chat_model_context_limit_tokens:
         await session.log("[LOG] Chat: token limit reached -> refusing request")
         raise HTTPException(
@@ -810,7 +787,7 @@ async def run_chat(
     # leading assistant content = identical output).
     messages: list[ChatMessage] = [ChatMessage(role="system", content=system_prompt)]
     for turn in history_turns:
-        messages.append(ChatMessage(role=turn.role, content=turn.content))
+        messages.append(ChatMessage(role=turn.role, content=turn.content or ""))  # type: ignore[arg-type]
     messages.append(
         ChatMessage(
             role="user",
@@ -864,9 +841,7 @@ async def run_chat(
             f"Rejection reason: {reason1}\n"
         )
         retry_messages = list(messages)
-        retry_messages.append(
-            ChatMessage(role="assistant", content=f"Previous (invalid) answer:\n{answer}")
-        )
+        retry_messages.append(ChatMessage(role="assistant", content=f"Previous (invalid) answer:\n{answer}"))
         retry_messages.append(ChatMessage(role="user", content=retry_user_prompt))
         try:
             answer2 = await openrouter.chat_completion(
@@ -880,9 +855,7 @@ async def run_chat(
         else:
             ok2, evaluated_answer2, reason2 = _evaluate_answer(answer2)
             if not ok2:
-                await session.log(
-                    f"[LOG] Guardrails retry still failed: {reason2} -> forcing fallback"
-                )
+                await session.log(f"[LOG] Guardrails retry still failed: {reason2} -> forcing fallback")
                 answer = STRICT_NO_MENTION
             else:
                 answer = evaluated_answer2
@@ -903,9 +876,7 @@ async def run_chat(
 
     async with session.lock:
         session.chat_history.append(ChatTurn(role="user", content=user_query))
-        session.chat_history.append(
-            ChatTurn(role="assistant", content=answer, citations=retrieved_chunks)
-        )
+        session.chat_history.append(ChatTurn(role="assistant", content=answer, citations=retrieved_chunks))
         session.register_references(cited_models)
         session.latest_evaluation = metrics.to_record()
 

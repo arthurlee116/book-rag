@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+
 class Settings(BaseModel):
     # OpenRouter
     openrouter_api_key: str = ""
@@ -179,9 +180,7 @@ def load_settings() -> Settings:
         embedding_model=os.getenv("OPENROUTER_EMBEDDING_MODEL", "qwen/qwen3-embedding-8b"),
         embedding_dim=getenv_int("OPENROUTER_EMBEDDING_DIM", 4096),
         embedding_dim_fast_mode=getenv_int("ERR_EMBEDDING_DIM_FAST_MODE", 1024),
-        embedding_query_use_instruction=getenv_bool(
-            "ERR_EMBEDDING_QUERY_USE_INSTRUCTION", True
-        ),
+        embedding_query_use_instruction=getenv_bool("ERR_EMBEDDING_QUERY_USE_INSTRUCTION", True),
         embedding_query_include_raw=getenv_bool("ERR_EMBEDDING_QUERY_INCLUDE_RAW", True),
         embedding_query_instruction_template=os.getenv(
             "ERR_EMBEDDING_QUERY_INSTRUCTION_TEMPLATE",
@@ -192,9 +191,7 @@ def load_settings() -> Settings:
             "Given a question, retrieve relevant passages from the document that explicitly contain the answer.",
         ),
         fast_mode_include_raw_query=getenv_bool("ERR_FAST_MODE_INCLUDE_RAW_QUERY", False),
-        fast_mode_embedding_aggregation_decay=getenv_float(
-            "ERR_FAST_MODE_EMBEDDING_AGGREGATION_DECAY", 0.7
-        ),
+        fast_mode_embedding_aggregation_decay=getenv_float("ERR_FAST_MODE_EMBEDDING_AGGREGATION_DECAY", 0.7),
         # Chunking params - keep defaults safe for low-memory servers.
         chunk_target_tokens=getenv_int("ERR_CHUNK_TARGET_TOKENS", 512),
         chunk_overlap_tokens=getenv_int("ERR_CHUNK_OVERLAP_TOKENS", 50),
@@ -226,18 +223,10 @@ def load_settings() -> Settings:
         llm_rerank_candidate_pool=getenv_int("ERR_LLM_RERANK_CANDIDATE_POOL", 30),
         llm_rerank_max_chars=getenv_int("ERR_LLM_RERANK_MAX_CHARS", 900),
         answer_repeat_guard_enabled=getenv_bool("ERR_ANSWER_REPEAT_GUARD_ENABLED", True),
-        answer_repeat_answer_similarity_min=getenv_float(
-            "ERR_ANSWER_REPEAT_ANSWER_SIMILARITY_MIN", 0.9
-        ),
-        answer_repeat_query_similarity_max=getenv_float(
-            "ERR_ANSWER_REPEAT_QUERY_SIMILARITY_MAX", 0.6
-        ),
+        answer_repeat_answer_similarity_min=getenv_float("ERR_ANSWER_REPEAT_ANSWER_SIMILARITY_MIN", 0.9),
+        answer_repeat_query_similarity_max=getenv_float("ERR_ANSWER_REPEAT_QUERY_SIMILARITY_MAX", 0.6),
         session_ttl_seconds=getenv_int("ERR_SESSION_TTL_SECONDS", 60 * 30),
-        session_cleanup_interval_seconds=getenv_int(
-            "ERR_SESSION_CLEANUP_INTERVAL_SECONDS", 30
-        ),
-        chat_model_context_limit_tokens=getenv_int(
-            "ERR_CHAT_MODEL_CONTEXT_LIMIT_TOKENS", 32768
-        ),
+        session_cleanup_interval_seconds=getenv_int("ERR_SESSION_CLEANUP_INTERVAL_SECONDS", 30),
+        chat_model_context_limit_tokens=getenv_int("ERR_CHAT_MODEL_CONTEXT_LIMIT_TOKENS", 32768),
         fast_mode_language_alignment=getenv_bool("ERR_FAST_MODE_LANGUAGE_ALIGNMENT", False),
     )

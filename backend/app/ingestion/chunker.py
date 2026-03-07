@@ -13,12 +13,12 @@ from .file_parser import ParsedBlock
 try:
     import spacy
 except ImportError:
-    spacy = None
+    spacy = None  # type: ignore
 
 try:
     from sentence_transformers import SentenceTransformer
 except ImportError:
-    SentenceTransformer = None
+    SentenceTransformer = None  # type: ignore
 
 
 _SHARED_EMBED_MODEL: Any | None = None
@@ -39,7 +39,7 @@ def estimate_tokens(text: str) -> int:
     latin_words = 0
     in_word = False
     for c in text:
-        if '\u4e00' <= c <= '\u9fff':
+        if "\u4e00" <= c <= "\u9fff":
             cjk += 1
             if in_word:
                 latin_words += 1
@@ -74,16 +74,13 @@ class Chunker:
         self.semantic_max_sentences = max(1, int(semantic_max_sentences))
         self.semantic_model_name = (semantic_model_name or "all-MiniLM-L6-v2").strip()
 
-        self._spacy_nlp = None
-        self._embed_model = None
+        self._spacy_nlp: Any | None = None
+        self._embed_model: Any | None = None
         self._embed_model_failed = False
 
     def _apply_hf_env(self) -> None:
         proxy = (
-            os.getenv("ERR_HF_PROXY")
-            or os.getenv("ERR_PROXY")
-            or os.getenv("HTTPS_PROXY")
-            or os.getenv("HTTP_PROXY")
+            os.getenv("ERR_HF_PROXY") or os.getenv("ERR_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
         )
         if proxy:
             os.environ.setdefault("HTTPS_PROXY", proxy)
@@ -130,10 +127,7 @@ class Chunker:
 
         global _SHARED_EMBED_MODEL, _SHARED_EMBED_MODEL_NAME
 
-        if (
-            _SHARED_EMBED_MODEL is not None
-            and _SHARED_EMBED_MODEL_NAME == self.semantic_model_name
-        ):
+        if _SHARED_EMBED_MODEL is not None and _SHARED_EMBED_MODEL_NAME == self.semantic_model_name:
             self._embed_model = _SHARED_EMBED_MODEL
             return
 
@@ -232,17 +226,17 @@ class Chunker:
         current_tokens = 0
         min_semantic_split_tokens = max(20, min(50, self.target_tokens // 2))
 
-        for i, sent in enumerate(all_sentences):
-            sent_tokens = int(sent["tokens"])
+        for i, sent_dict in enumerate(all_sentences):
+            sent_tokens_val = int(sent_dict["tokens"])
 
-            if current_chunk_sents and (current_tokens + sent_tokens > self.target_tokens):
+            if current_chunk_sents and (current_tokens + sent_tokens_val > self.target_tokens):
                 overlap_sents, overlap_tokens = self._get_overlap_sents(current_chunk_sents)
                 self._flush_chunk(chunks, current_chunk_sents)
                 current_chunk_sents = overlap_sents
                 current_tokens = overlap_tokens
 
-            current_chunk_sents.append(sent)
-            current_tokens += sent_tokens
+            current_chunk_sents.append(sent_dict)
+            current_tokens += sent_tokens_val
 
             should_split = False
             if use_semantic and i < len(distances):

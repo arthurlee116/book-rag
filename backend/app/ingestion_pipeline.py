@@ -24,10 +24,7 @@ async def ingest_file(
         return
 
     async with session.lock:
-        if (
-            ingest_generation is not None
-            and ingest_generation != session.ingest_generation
-        ):
+        if ingest_generation is not None and ingest_generation != session.ingest_generation:
             return
         session.ingest_status = "processing"
         session.ingest_error = None
@@ -44,15 +41,10 @@ async def ingest_file(
     parser = FileParser()
     loop = asyncio.get_running_loop()
     try:
-        blocks = await loop.run_in_executor(
-            None, lambda: parser.parse(filename=filename, content=content)
-        )
+        blocks = await loop.run_in_executor(None, lambda: parser.parse(filename=filename, content=content))
     except Exception as e:  # noqa: BLE001
         async with session.lock:
-            if (
-                ingest_generation is not None
-                and ingest_generation != session.ingest_generation
-            ):
+            if ingest_generation is not None and ingest_generation != session.ingest_generation:
                 return
             session.ingest_status = "error"
             session.ingest_error = str(e)
@@ -80,10 +72,7 @@ async def ingest_file(
         chunks = await loop.run_in_executor(None, lambda: chunker.chunk(blocks=blocks))
     except Exception as e:  # noqa: BLE001
         async with session.lock:
-            if (
-                ingest_generation is not None
-                and ingest_generation != session.ingest_generation
-            ):
+            if ingest_generation is not None and ingest_generation != session.ingest_generation:
                 return
             session.ingest_status = "error"
             session.ingest_error = str(e)
@@ -93,10 +82,7 @@ async def ingest_file(
     await session.log(f"[LOG] Created {len(chunks)} chunks")
     if not chunks:
         async with session.lock:
-            if (
-                ingest_generation is not None
-                and ingest_generation != session.ingest_generation
-            ):
+            if ingest_generation is not None and ingest_generation != session.ingest_generation:
                 return
             session.ingest_status = "error"
             session.ingest_error = "No chunks created from document"
@@ -119,9 +105,7 @@ async def ingest_file(
         async with semaphore:
             start = b_idx * batch_size
             end = min(len(chunks), (b_idx + 1) * batch_size)
-            await session.log(
-                f"[LOG] Embedding batch {b_idx + 1}/{total_batches} ({start}-{end})..."
-            )
+            await session.log(f"[LOG] Embedding batch {b_idx + 1}/{total_batches} ({start}-{end})...")
             texts = [c.content for c in chunks[start:end]]
             try:
                 embs = await openrouter.embeddings(model=settings.embedding_model, inputs=texts)
@@ -149,10 +133,7 @@ async def ingest_file(
                 if pending:
                     await asyncio.gather(*pending, return_exceptions=True)
                 async with session.lock:
-                    if (
-                        ingest_generation is not None
-                        and ingest_generation != session.ingest_generation
-                    ):
+                    if ingest_generation is not None and ingest_generation != session.ingest_generation:
                         return
                     session.ingest_status = "error"
                     session.ingest_error = err
@@ -162,21 +143,15 @@ async def ingest_file(
             batch_dim = int(embs.shape[1])
             if detected_embedding_dim is None:
                 detected_embedding_dim = batch_dim
-                embeddings_matrix = np.empty(
-                    (len(chunks), detected_embedding_dim), dtype=np.float32
-                )
+                embeddings_matrix = np.empty((len(chunks), detected_embedding_dim), dtype=np.float32)
                 await session.log(f"[LOG] Detected embedding dim: {detected_embedding_dim}")
             elif batch_dim != detected_embedding_dim:
                 async with session.lock:
-                    if (
-                        ingest_generation is not None
-                        and ingest_generation != session.ingest_generation
-                    ):
+                    if ingest_generation is not None and ingest_generation != session.ingest_generation:
                         return
                     session.ingest_status = "error"
                     session.ingest_error = (
-                        f"Inconsistent embedding dim across batches: "
-                        f"expected {detected_embedding_dim}, got {batch_dim}"
+                        f"Inconsistent embedding dim across batches: expected {detected_embedding_dim}, got {batch_dim}"
                     )
                 await session.log(
                     "[LOG] ERROR embedding: Inconsistent embedding dim across batches "
@@ -198,10 +173,7 @@ async def ingest_file(
 
     if detected_embedding_dim is None or embeddings_matrix is None:
         async with session.lock:
-            if (
-                ingest_generation is not None
-                and ingest_generation != session.ingest_generation
-            ):
+            if ingest_generation is not None and ingest_generation != session.ingest_generation:
                 return
             session.ingest_status = "error"
             session.ingest_error = "Could not determine embedding dimension"
@@ -228,10 +200,7 @@ async def ingest_file(
         )
     except Exception as e:  # noqa: BLE001
         async with session.lock:
-            if (
-                ingest_generation is not None
-                and ingest_generation != session.ingest_generation
-            ):
+            if ingest_generation is not None and ingest_generation != session.ingest_generation:
                 return
             session.ingest_status = "error"
             session.ingest_error = str(e)
@@ -248,10 +217,7 @@ async def ingest_file(
 
     stale = False
     async with session.lock:
-        if (
-            ingest_generation is not None
-            and ingest_generation != session.ingest_generation
-        ):
+        if ingest_generation is not None and ingest_generation != session.ingest_generation:
             stale = True
         else:
             session.chunks = chunks

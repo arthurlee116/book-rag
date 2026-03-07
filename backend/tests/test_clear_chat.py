@@ -21,10 +21,10 @@ from backend.app.session_store import (
     get_or_create_session,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_chunk(cid: str = "c1", content: str = "hello") -> ChunkModel:
     return ChunkModel(id=cid, content=content, rich_content=content)
@@ -42,6 +42,7 @@ def _make_evaluation(session_id: str = "s1") -> EvaluationRecord:
 # ---------------------------------------------------------------------------
 # Unit tests for SessionState.clear_chat_data
 # ---------------------------------------------------------------------------
+
 
 class TestClearChatData(unittest.IsolatedAsyncioTestCase):
     """Validates Requirements 3.1, 3.2, 3.3, 3.4."""
@@ -108,6 +109,7 @@ class TestClearChatData(unittest.IsolatedAsyncioTestCase):
 # Endpoint tests for POST /clear/{session_id}
 # ---------------------------------------------------------------------------
 
+
 class TestClearChatEndpoint(unittest.TestCase):
     """Validates Requirements 3.5, 3.6."""
 
@@ -115,6 +117,7 @@ class TestClearChatEndpoint(unittest.TestCase):
         os.environ.setdefault("OPENROUTER_API_KEY", "test-key")
         SESSIONS.clear()
         from backend.app.main import app
+
         self.client = TestClient(app)
         self.client.__enter__()
 

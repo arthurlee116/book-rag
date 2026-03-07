@@ -14,7 +14,5 @@ class TestRetrievalInitImportLight(unittest.TestCase):
         self.assertNotIn(
             "backend.app.retrieval.hybrid_retriever",
             sys.modules,
-            msg="`backend.app.retrieval` should remain import-light and not import "
-            "`hybrid_retriever` implicitly.",
+            msg="`backend.app.retrieval` should remain import-light and not import `hybrid_retriever` implicitly.",
         )
-
