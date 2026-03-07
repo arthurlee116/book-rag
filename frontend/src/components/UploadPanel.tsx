@@ -60,6 +60,16 @@ export function UploadPanel() {
     return isProcessing ? 50 : 0;
   }, [logs, isProcessing]);
 
+  const createEphemeralSessionId = () => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+
+    const buf = new Uint8Array(16);
+    crypto.getRandomValues(buf);
+    return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("-");
+  };
+
   const onUpload = async () => {
     const file = fileRef.current;
     if (!file) return;
@@ -70,24 +80,9 @@ export function UploadPanel() {
     closeRightPanel();
     setUploadStatus("processing");
 
-    const ensureSessionId = () => {
-      if (sessionId) return sessionId;
-      // P2: Always use a cryptographically secure source — crypto.randomUUID if
-      // available, otherwise crypto.getRandomValues() for high-entropy fallback.
-      let generated: string;
-      if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-        generated = crypto.randomUUID();
-      } else {
-        // Secure fallback: 128 bits from CSPRNG
-        const buf = new Uint8Array(16);
-        crypto.getRandomValues(buf);
-        generated = Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("-");
-      }
-      setSessionId(generated);
-      return generated;
-    };
-
-    const activeSessionId = ensureSessionId();
+    // Keep the first-upload session ID local until the backend has created the
+    // session; otherwise the logs panel can mount early and race the SSE route.
+    const activeSessionId = sessionId ?? createEphemeralSessionId();
     const fd = new FormData();
     fd.append("file", file);
 
@@ -108,7 +103,7 @@ export function UploadPanel() {
 
       const data = (await resp.json()) as { session_id: string };
       if (!isMounted.current) return; // P3: guard
-      if (data.session_id && data.session_id !== activeSessionId) {
+      if (data.session_id && data.session_id !== sessionId) {
         setSessionId(data.session_id);
       }
     } catch (err) {
