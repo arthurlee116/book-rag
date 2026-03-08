@@ -48,7 +48,8 @@ class TestOpenRouterChatRequest(unittest.IsolatedAsyncioTestCase):
             )
         finally:
             client._client = real_client
-            await real_client.aclose()
+            if real_client is not None:
+                await real_client.aclose()
 
         self.assertEqual(content, "OK")
         self.assertEqual(fake_client.last_json["reasoning"], {"max_tokens": 64})
@@ -80,7 +81,8 @@ class TestOpenRouterChatRequest(unittest.IsolatedAsyncioTestCase):
             )
         finally:
             client._client = real_client
-            await real_client.aclose()
+            if real_client is not None:
+                await real_client.aclose()
 
         self.assertEqual(content, "Ponyboy is the narrator [1].")
 

@@ -60,19 +60,32 @@ class OpenRouterClient:
         if not settings.openrouter_api_key:
             raise OpenRouterError("OPENROUTER_API_KEY is not set")
         self.settings = settings
-        self._client = httpx.AsyncClient(
-            base_url=settings.openrouter_base_url.rstrip("/"),
-            timeout=httpx.Timeout(60.0, connect=10.0),
-            headers={
-                "Authorization": f"Bearer {settings.openrouter_api_key}",
-                "HTTP-Referer": settings.openrouter_http_referer,
-                "X-Title": settings.openrouter_x_title,
-                "Content-Type": "application/json",
-            },
-        )
+        self._base_url = settings.openrouter_base_url.rstrip("/")
+        self._timeout = httpx.Timeout(60.0, connect=10.0)
+        self._headers = {
+            "Authorization": f"Bearer {settings.openrouter_api_key}",
+            "HTTP-Referer": settings.openrouter_http_referer,
+            "X-Title": settings.openrouter_x_title,
+            "Content-Type": "application/json",
+        }
+        # Optional override used by tests; production traffic uses a fresh
+        # client per request to avoid stale pooled connections with providers.
+        self._client = None
 
     async def aclose(self) -> None:
-        await self._client.aclose()
+        if isinstance(self._client, httpx.AsyncClient):
+            await self._client.aclose()
+
+    async def _post(self, path: str, *, json_body: dict[str, Any]) -> httpx.Response:
+        if self._client is not None:
+            return await self._client.post(path, json=json_body)
+
+        async with httpx.AsyncClient(
+            base_url=self._base_url,
+            timeout=self._timeout,
+            headers=self._headers,
+        ) as client:
+            return await client.post(path, json=json_body)
 
     @retry(
         stop=stop_after_attempt(3),
@@ -84,9 +97,9 @@ class OpenRouterClient:
         """
         Returns float32 ndarray of shape (len(inputs), embedding_dim).
         """
-        resp = await self._client.post(
+        resp = await self._post(
             "/embeddings",
-            json={
+            json_body={
                 "model": model,
                 "input": inputs,
                 # Explicit "float" for portability. (OpenRouter may support base64 too.)
@@ -148,7 +161,7 @@ class OpenRouterClient:
         if max_tokens is not None:
             body["max_tokens"] = max_tokens
 
-        resp = await self._client.post("/chat/completions", json=body)
+        resp = await self._post("/chat/completions", json_body=body)
         payload: Any
         try:
             payload = resp.json()
