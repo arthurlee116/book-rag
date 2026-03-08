@@ -37,6 +37,9 @@ class TestConfigDefaultsConsistency(unittest.TestCase):
         static_defaults = Settings()
         self.assertEqual(loaded.chunk_target_tokens, static_defaults.chunk_target_tokens)
         self.assertEqual(loaded.chunk_overlap_tokens, static_defaults.chunk_overlap_tokens)
+        self.assertEqual(loaded.chat_model, static_defaults.chat_model)
+        self.assertEqual(loaded.chat_model_simple, static_defaults.chat_model_simple)
+        self.assertEqual(loaded.chat_model_complex, static_defaults.chat_model_complex)
         self.assertEqual(loaded.drift_sim_threshold, static_defaults.drift_sim_threshold)
         self.assertEqual(
             loaded.hyde_drift_sim_threshold,

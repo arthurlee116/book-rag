@@ -218,8 +218,8 @@ OPENROUTER_API_KEY=your_key_here
 **Common Settings:**
 ```bash
 # Model selection
-OPENROUTER_CHAT_MODEL_SIMPLE=google/gemini-2.5-flash-lite-preview-09-2025
-OPENROUTER_CHAT_MODEL_COMPLEX=google/gemini-2.5-flash-preview-09-2025
+OPENROUTER_CHAT_MODEL_SIMPLE=qwen/qwen3.5-35b-a3b
+OPENROUTER_CHAT_MODEL_COMPLEX=qwen/qwen3.5-122b-a10b
 OPENROUTER_EMBEDDING_MODEL=qwen/qwen3-embedding-8b
 
 # Session TTL (default: 30 min)

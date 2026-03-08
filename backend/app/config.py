@@ -10,9 +10,9 @@ class Settings(BaseModel):
     openrouter_http_referer: str = "http://localhost:3000"
     openrouter_x_title: str = "ERR-App"
 
-    chat_model: str = "google/gemini-2.5-flash"  # deprecated, use simple/complex
-    chat_model_simple: str = "google/gemini-2.5-flash-lite-preview-09-2025"
-    chat_model_complex: str = "google/gemini-2.5-flash-preview-09-2025"
+    chat_model: str = "qwen/qwen3.5-35b-a3b"  # deprecated, use simple/complex
+    chat_model_simple: str = "qwen/qwen3.5-35b-a3b"
+    chat_model_complex: str = "qwen/qwen3.5-122b-a10b"
     embedding_model: str = "qwen/qwen3-embedding-8b"
     embedding_dim: int = 4096
     embedding_dim_fast_mode: int = 1024  # MRL: use lower dimension in fast mode for speed
@@ -174,9 +174,9 @@ def load_settings() -> Settings:
         openrouter_base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
         openrouter_http_referer=os.getenv("OPENROUTER_HTTP_REFERER", "http://localhost:3000"),
         openrouter_x_title=os.getenv("OPENROUTER_X_TITLE", "ERR-App"),
-        chat_model=os.getenv("OPENROUTER_CHAT_MODEL", "google/gemini-2.5-flash"),
-        chat_model_simple=os.getenv("OPENROUTER_CHAT_MODEL_SIMPLE", "google/gemini-2.5-flash-lite-preview-09-2025"),
-        chat_model_complex=os.getenv("OPENROUTER_CHAT_MODEL_COMPLEX", "google/gemini-2.5-flash-preview-09-2025"),
+        chat_model=os.getenv("OPENROUTER_CHAT_MODEL", "qwen/qwen3.5-35b-a3b"),
+        chat_model_simple=os.getenv("OPENROUTER_CHAT_MODEL_SIMPLE", "qwen/qwen3.5-35b-a3b"),
+        chat_model_complex=os.getenv("OPENROUTER_CHAT_MODEL_COMPLEX", "qwen/qwen3.5-122b-a10b"),
         embedding_model=os.getenv("OPENROUTER_EMBEDDING_MODEL", "qwen/qwen3-embedding-8b"),
         embedding_dim=getenv_int("OPENROUTER_EMBEDDING_DIM", 4096),
         embedding_dim_fast_mode=getenv_int("ERR_EMBEDDING_DIM_FAST_MODE", 1024),

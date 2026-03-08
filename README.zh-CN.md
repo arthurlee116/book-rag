@@ -227,9 +227,9 @@ npm run dev
 ```bash
 # 模型配置
 # 简单任务（翻译、HyDE、问答）- 使用轻量/快速模型
-OPENROUTER_CHAT_MODEL_SIMPLE=google/gemini-2.5-flash-lite-preview-09-2025
+OPENROUTER_CHAT_MODEL_SIMPLE=qwen/qwen3.5-35b-a3b
 # 复杂任务（多查询扩展、LLM 重排序）- 使用更强模型
-OPENROUTER_CHAT_MODEL_COMPLEX=google/gemini-2.5-flash-preview-09-2025
+OPENROUTER_CHAT_MODEL_COMPLEX=qwen/qwen3.5-122b-a10b
 OPENROUTER_EMBEDDING_MODEL=qwen/qwen3-embedding-8b
 
 # 检索流水线
