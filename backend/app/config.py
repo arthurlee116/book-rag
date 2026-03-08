@@ -9,6 +9,7 @@ class Settings(BaseModel):
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_http_referer: str = "http://localhost:3000"
     openrouter_x_title: str = "ERR-App"
+    openrouter_reasoning_max_tokens: int = 64
 
     chat_model: str = "qwen/qwen3.5-35b-a3b"  # deprecated, use simple/complex
     chat_model_simple: str = "qwen/qwen3.5-35b-a3b"
@@ -174,6 +175,7 @@ def load_settings() -> Settings:
         openrouter_base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
         openrouter_http_referer=os.getenv("OPENROUTER_HTTP_REFERER", "http://localhost:3000"),
         openrouter_x_title=os.getenv("OPENROUTER_X_TITLE", "ERR-App"),
+        openrouter_reasoning_max_tokens=getenv_int("OPENROUTER_REASONING_MAX_TOKENS", 64),
         chat_model=os.getenv("OPENROUTER_CHAT_MODEL", "qwen/qwen3.5-35b-a3b"),
         chat_model_simple=os.getenv("OPENROUTER_CHAT_MODEL_SIMPLE", "qwen/qwen3.5-35b-a3b"),
         chat_model_complex=os.getenv("OPENROUTER_CHAT_MODEL_COMPLEX", "qwen/qwen3.5-122b-a10b"),

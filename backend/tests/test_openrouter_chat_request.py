@@ -25,7 +25,7 @@ class _FakeAsyncClient:
 
 
 class TestOpenRouterChatRequest(unittest.IsolatedAsyncioTestCase):
-    async def test_chat_completion_does_not_force_reasoning_exclusion(self) -> None:
+    async def test_chat_completion_requests_bounded_reasoning_tokens(self) -> None:
         client = OpenRouterClient(Settings(openrouter_api_key="test-key"))
         fake_client = _FakeAsyncClient(
             {
@@ -51,7 +51,7 @@ class TestOpenRouterChatRequest(unittest.IsolatedAsyncioTestCase):
             await real_client.aclose()
 
         self.assertEqual(content, "OK")
-        self.assertNotIn("reasoning", fake_client.last_json)
+        self.assertEqual(fake_client.last_json["reasoning"], {"max_tokens": 64})
 
     async def test_chat_completion_extracts_text_from_content_parts(self) -> None:
         client = OpenRouterClient(Settings(openrouter_api_key="test-key"))

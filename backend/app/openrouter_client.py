@@ -141,6 +141,10 @@ class OpenRouterClient:
             "temperature": temperature,
             "stream": False,
         }
+        if self.settings.openrouter_reasoning_max_tokens > 0:
+            body["reasoning"] = {
+                "max_tokens": int(self.settings.openrouter_reasoning_max_tokens),
+            }
         if max_tokens is not None:
             body["max_tokens"] = max_tokens
 
