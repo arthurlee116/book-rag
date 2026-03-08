@@ -140,6 +140,9 @@ class OpenRouterClient:
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "temperature": temperature,
             "stream": False,
+            # Qwen 3.5 reasoning models are much slower and less format-stable
+            # for strict JSON/citation tasks when reasoning is left enabled.
+            "reasoning": {"effort": "none", "exclude": True},
         }
         if max_tokens is not None:
             body["max_tokens"] = max_tokens
