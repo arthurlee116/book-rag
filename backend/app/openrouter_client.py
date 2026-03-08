@@ -140,9 +140,6 @@ class OpenRouterClient:
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "temperature": temperature,
             "stream": False,
-            # Qwen 3.5 reasoning models are much slower and less format-stable
-            # for strict JSON/citation tasks when reasoning is left enabled.
-            "reasoning": {"effort": "none", "exclude": True},
         }
         if max_tokens is not None:
             body["max_tokens"] = max_tokens
@@ -171,10 +168,58 @@ class OpenRouterClient:
         message_obj = choices[0].get("message") if isinstance(choices[0], dict) else None
         if not isinstance(message_obj, dict):
             raise OpenRouterError("Chat response missing choices[0].message")
-        content = message_obj.get("content")
-        if not isinstance(content, str):
-            raise OpenRouterError("Chat response missing choices[0].message.content")
-        return content.strip()
+        content = self._extract_message_text(message_obj.get("content"))
+        if content:
+            return content
+
+        reasoning = self._extract_reasoning_text(message_obj)
+        if reasoning:
+            raise OpenRouterError("Chat response missing final content; reasoning was returned separately")
+
+        raise OpenRouterError("Chat response missing choices[0].message.content")
+
+    def _extract_message_text(self, content: Any) -> str:
+        if isinstance(content, str):
+            return content.strip()
+        if not isinstance(content, list):
+            return ""
+
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                text = item.strip()
+                if text:
+                    parts.append(text)
+                continue
+            if not isinstance(item, dict):
+                continue
+            for key in ("text", "content", "value"):
+                raw = item.get(key)
+                if isinstance(raw, str) and raw.strip():
+                    parts.append(raw.strip())
+                    break
+        return "\n".join(parts).strip()
+
+    def _extract_reasoning_text(self, message_obj: dict[str, Any]) -> str:
+        parts: list[str] = []
+
+        for key in ("reasoning", "reasoning_content"):
+            extracted = self._extract_message_text(message_obj.get(key))
+            if extracted:
+                parts.append(extracted)
+
+        details = message_obj.get("reasoning_details")
+        if isinstance(details, list):
+            for item in details:
+                if not isinstance(item, dict):
+                    continue
+                for key in ("text", "summary"):
+                    raw = item.get(key)
+                    if isinstance(raw, str) and raw.strip():
+                        parts.append(raw.strip())
+                        break
+
+        return "\n".join(parts).strip()
 
     async def translate_query_for_doc_language(self, *, query: str, doc_language: str) -> str:
         """
