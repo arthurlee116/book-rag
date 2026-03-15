@@ -68,24 +68,27 @@ class OpenRouterClient:
             "X-Title": settings.openrouter_x_title,
             "Content-Type": "application/json",
         }
-        # Optional override used by tests; production traffic uses a fresh
-        # client per request to avoid stale pooled connections with providers.
-        self._client = None
+        # Reuse a single AsyncClient so repeated embedding/chat calls share the
+        # same connection pool. Tests may still replace `_client` with a fake.
+        self._client = self._create_async_client()
 
-    async def aclose(self) -> None:
-        if isinstance(self._client, httpx.AsyncClient):
-            await self._client.aclose()
-
-    async def _post(self, path: str, *, json_body: dict[str, Any]) -> httpx.Response:
-        if self._client is not None:
-            return await self._client.post(path, json=json_body)
-
-        async with httpx.AsyncClient(
+    def _create_async_client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
             base_url=self._base_url,
             timeout=self._timeout,
             headers=self._headers,
-        ) as client:
-            return await client.post(path, json=json_body)
+        )
+
+    async def aclose(self) -> None:
+        client = self._client
+        self._client = None
+        if isinstance(client, httpx.AsyncClient):
+            await client.aclose()
+
+    async def _post(self, path: str, *, json_body: dict[str, Any]) -> httpx.Response:
+        if self._client is None:
+            self._client = self._create_async_client()
+        return await self._client.post(path, json=json_body)
 
     @retry(
         stop=stop_after_attempt(3),
@@ -147,6 +150,7 @@ class OpenRouterClient:
         messages: list[ChatMessage],
         temperature: float = 0.0,
         max_tokens: int | None = None,
+        include_reasoning: bool = True,
     ) -> str:
         body: dict[str, Any] = {
             "model": model,
@@ -154,7 +158,7 @@ class OpenRouterClient:
             "temperature": temperature,
             "stream": False,
         }
-        if self.settings.openrouter_reasoning_max_tokens > 0:
+        if include_reasoning and self.settings.openrouter_reasoning_max_tokens > 0:
             body["reasoning"] = {
                 "max_tokens": int(self.settings.openrouter_reasoning_max_tokens),
             }
@@ -253,6 +257,7 @@ class OpenRouterClient:
             model=self.settings.chat_model_simple,
             messages=[ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
             temperature=0.0,
+            include_reasoning=False,
         )
         # Defensive cleanup: keep it as a single line string when possible.
         cleaned = " ".join(translated.split())
@@ -336,6 +341,7 @@ class OpenRouterClient:
             model=self.settings.chat_model_complex,
             messages=[ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
             temperature=0.0,
+            include_reasoning=False,
         )
 
         extracted = self._extract_json_text(raw)
@@ -401,6 +407,7 @@ class OpenRouterClient:
                 ChatMessage(role="user", content=user),
             ],
             temperature=0.2,
+            include_reasoning=False,
         )
         cleaned = "\n".join([ln.rstrip() for ln in (passage or "").strip().splitlines()]).strip()
         return cleaned
@@ -454,6 +461,7 @@ class OpenRouterClient:
             model=effective_model,
             messages=[ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
             temperature=0.0,
+            include_reasoning=False,
         )
 
         extracted = self._extract_json_text(raw)
